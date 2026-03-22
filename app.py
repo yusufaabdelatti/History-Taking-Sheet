@@ -95,7 +95,7 @@ REFERRAL_AR  = [NA,"ذاتي","الأسرة","طبيب","أخصائي نفسي",
 HTYPE_AR     = [NA,"أولي / Initial","متابعة / Follow-up","طارئ / Emergency","استشاري / Consultation"]
 ALIVE_M      = ["على قيد الحياة","متوفى","غير معروف"]
 ALIVE_F      = ["على قيد الحياة","متوفاة","غير معروف"]
-CONS_AR      = [NA,"لا توجد قرابة","درجة أولى","درجة ثانية","درجة ثالثة"]
+CONS_AR      = [NA,"لا توجد قرابة","درجة أولى (مثال: أبناء العمومة والخؤولة)","درجة ثانية (مثال: أقارب من الدرجة الثانية)","درجة ثالثة (مثال: أقارب بعيدون)"]
 PARENTS_REL  = [NA,"جيدة","متوسطة","سيئة","منفصلان","مطلقان","أحدهما متوفى"]
 MARQ_AR      = [NA,"جيدة","متوسطة","سيئة","منفصلان"]
 PRE_MAR      = [NA,"لا توجد علاقة سابقة","تعارف فقط","علاقة طويلة","زواج مرتب","أخرى"]
@@ -171,13 +171,13 @@ if is_adult:
         st.markdown("**الأب / Father**")
         d["father_name"]  = ti("اسم الأب","Father Name","a_fn")
         d["father_age"]   = ti("سن الأب","Father Age","a_fa")
-        d["father_occ"]   = sel("وظيفة الأب","Father Occupation", OCC_AR, "a_fo")
+        d["father_occ"]   = ti("وظيفة الأب","Father Occupation","a_fo")
         d["father_alive"] = rb("حالة الأب","Father status", ALIVE_M, "a_falive")
     with c2:
         st.markdown("**الأم / Mother**")
         d["mother_name"]  = ti("اسم الأم","Mother Name","a_mn")
         d["mother_age"]   = ti("سن الأم","Mother Age","a_ma")
-        d["mother_occ"]   = sel("وظيفة الأم","Mother Occupation", OCC_AR, "a_mo")
+        d["mother_occ"]   = ti("وظيفة الأم","Mother Occupation","a_mo")
         d["mother_alive"] = rb("حالة الأم","Mother status", ALIVE_F, "a_malive")
     d["consanguinity"]    = sel("القرابة بين الأب والأم","Consanguinity", CONS_AR, "a_cons")
     d["parents_together"] = rb("هل الأبوان يعيشان معاً؟","Parents living together?", نعم_لا_لاينطبق, "a_ptog")
@@ -285,7 +285,7 @@ else:
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("**الحمل والولادة**")
-        d["pregnancy"]    = sel("تفاصيل الحمل","Pregnancy", PREG_AR, "c_preg")
+        d["pregnancy"]    = ta("تفاصيل الحمل","Pregnancy details","c_preg", 80)
         d["birth_type"]   = sel("نوع الولادة","Birth type", BIRTH_TYPE, "c_btype")
         d["birth_comp"]   = sel("مضاعفات الولادة","Birth complications", BIRTH_COMP, "c_bcomp")
         d["vacc_status"]  = sel("التطعيمات","Vaccinations", VACC_AR, "c_vacc")
@@ -313,14 +313,14 @@ else:
         st.markdown("**الأب / Father**")
         d["father_name"]      = ti("اسم الأب","Father Name","c_fn")
         d["father_age"]       = ti("سن الأب","Father Age","c_fa")
-        d["father_occ"]       = sel("وظيفة الأب","Father Occupation", OCC_AR, "c_fo")
+        d["father_occ"]       = ti("وظيفة الأب","Father Occupation","c_fo")
         d["father_alive"]     = rb("حالة الأب","Father status", ALIVE_M, "c_falive")
         d["father_hereditary"]= ti("مرض وراثي عند الأب (إن وجد)","Father hereditary","c_fh")
     with c2:
         st.markdown("**الأم / Mother**")
         d["mother_name"]      = ti("اسم الأم","Mother Name","c_mn")
         d["mother_age"]       = ti("سن الأم","Mother Age","c_ma")
-        d["mother_occ"]       = sel("وظيفة الأم","Mother Occupation", OCC_AR, "c_mo")
+        d["mother_occ"]       = ti("وظيفة الأم","Mother Occupation","c_mo")
         d["mother_alive"]     = rb("حالة الأم","Mother status", ALIVE_F, "c_malive")
         d["mother_hereditary"]= ti("مرض وراثي عند الأم (إن وجد)","Mother hereditary","c_mh")
     d["consanguinity"] = sel("القرابة بين الأب والأم","Consanguinity", CONS_AR, "c_cons")
@@ -397,8 +397,8 @@ else:
     with c1:
         d["sleep"]          = sel("نمط النوم","Sleep", SLEEP_AR, "c_sleep")
         d["appetite"]       = sel("الشهية","Appetite", APPETITE_AR, "c_appetite")
-        d["punishment"]     = sel("طرق العقاب المستخدمة","Punishment methods", PUNISHMENT, "c_punish")
-        d["stress_reaction"]= sel("رد الفعل تجاه الضغوط","Reaction to stress", STRESS_AR, "c_stress")
+        d["punishment"]     = ms("طرق العقاب المستخدمة","Punishment methods", ["لفظي","حرمان من الامتيازات","جسدي","تجاهل","عقاب بالحرمان الاجتماعي","أخرى"], "c_punish")
+        d["stress_reaction"]= ms("رد الفعل تجاه الضغوط","Reaction to stress", ["هادئ","بكاء","عدوان","انسحاب","نوبات غضب","تبوّل لاإرادي","أخرى"], "c_stress")
     with c2:
         d["therapy"] = ta("الجلسات العلاجية الحالية","Current therapy sessions","c_therapy",80)
     d["extra_notes"] = ta("ملاحظات إضافية","Additional notes","c_extra",80)
@@ -531,38 +531,35 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 ٦. اجعل التقرير سردياً تفصيلياً وليس قائمة أسئلة وإجابات
 ٧. لا تكتب أي قسم إذا كانت جميع بياناته "لم يُذكر"
 
-نسّق البيانات التالية في تقرير منظم باستخدام الهيكل الآتي. ضع فقط البيانات المُدخلة تحت كل قسم. لا تضف أي شيء:
+Structure the report using these sections. Include ONLY data that was provided:
+
+1. PATIENT INFORMATION
+Present as a clean two-column table (Field | Value). Include only provided fields.
+
+2. PRESENTING CONCERNS
+Convert onset, mode, and course into natural sentences. Do NOT include Chief Complaint or HPI text here — those go in section 7.
+
+{"3. FAMILY AND MARRIAGE BACKGROUND" if is_adult else "3. FAMILY BACKGROUND"}
+Convert all MCQ answers into natural English sentences. Free text fields go to section 7.
+
+{"" if is_adult else "4. DEVELOPMENTAL HISTORY"}
+{"" if is_adult else "Present as a clean two-column table (Milestone | Finding). Include only provided milestones."}
+
+{"4. MEDICAL HISTORY" if is_adult else "5. MEDICAL HISTORY"}
+Convert Yes/No answers into natural sentences. Free text details go to section 7.
+
+{"5. BEHAVIORAL AND CLINICAL OBSERVATIONS" if is_adult else "6. BEHAVIORAL AND CLINICAL OBSERVATIONS"}
+Convert all MCQ answers into natural English sentences.
+
+{"6. ADDITIONAL INFORMATION" if is_adult else "6. ADDITIONAL INFORMATION"}
+Any siblings data, referral info, or other structured fields not covered above.
+
+7. ORIGINAL ARABIC RESPONSES
+Place ALL long Arabic text fields here verbatim — exactly as written, zero modification:
+{verbatim_block if verbatim_block else "(No long text responses provided)"}
 
 ══════════════════════════════════════════════
-البيانات الأساسية
-══════════════════════════════════════════════
-ضع البيانات الشخصية في جدول بعمودين (البيان | القيمة). البيانات المُدخلة فقط، لا شيء غيرها.
-
-══════════════════════════════════════════════
-{"بيانات الأسرة والزواج" if is_adult else "بيانات الأسرة"}
-══════════════════════════════════════════════
-ضع بيانات الأسرة كنقاط. حوّل إجابات الاختيار من متعدد إلى جمل قصيرة طبيعية. النصوص الحرة تُنسخ حرفياً.
-
-{"" if not is_adult else ""}══════════════════════════════════════════════
-{"" if is_adult else "مراحل النمو"}
-{"" if is_adult else "══════════════════════════════════════════════"}
-{"" if is_adult else "ضع مراحل النمو في جدول بعمودين (المرحلة | البيان). البيانات المُدخلة فقط."}
-
-══════════════════════════════════════════════
-الشكوى الرئيسية وتاريخ المرض الحالي
-══════════════════════════════════════════════
-انسخ نص الشكاوى وHPI حرفياً كما كُتب. أضف بيانات البداية والمسار كنقاط.
-
-══════════════════════════════════════════════
-التاريخ المرضي
-══════════════════════════════════════════════
-ضع كل قسم فرعي تحت عنوانه الفرعي. حوّل إجابات الاختيار من متعدد إلى جمل قصيرة. النصوص الحرة تُنسخ حرفياً.
-
-══════════════════════════════════════════════
-التقييم السريري
-══════════════════════════════════════════════
-ضع بيانات التقييم كنقاط. حوّل إجابات الاختيار إلى جمل قصيرة. النصوص الحرة تُنسخ حرفياً.
-
+DATA:
 
 
 ══════════════════════════════════════════════
