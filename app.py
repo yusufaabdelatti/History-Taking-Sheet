@@ -69,15 +69,25 @@ def lbl(en, ar):
 
 def ti(en, ar, key, placeholder=""):
     lbl(en, ar)
-    return st.text_input("", key=key, placeholder=placeholder, label_visibility="collapsed")
+    val = st.text_input("", key=key, placeholder=placeholder, label_visibility="collapsed",
+                        value=st.session_state.get(key, ""))
+    st.session_state[key] = val
+    return val
 
 def ta(en, ar, key, height=100):
     lbl(en, ar)
-    return st.text_area("", key=key, height=height, label_visibility="collapsed")
+    val = st.text_area("", key=key, height=height, label_visibility="collapsed",
+                       value=st.session_state.get(key, ""))
+    st.session_state[key] = val
+    return val
 
 def rb(en, ar, opts, key):
     lbl(en, ar)
-    return st.radio("", opts, key=key, horizontal=True, label_visibility="collapsed")
+    current = st.session_state.get(key, opts[0])
+    idx = opts.index(current) if current in opts else 0
+    val = st.radio("", opts, index=idx, key=key, horizontal=True, label_visibility="collapsed")
+    st.session_state[key] = val
+    return val
 
 def sv(key, default="—"):
     v = st.session_state.get(key, "")
@@ -193,11 +203,11 @@ if sheet_type == "adult":
         for i in range(1, 5):
             st.markdown(f"**Sibling {i} / الأخ/الأخت {i}**")
             c1, c2, c3, c4, c5 = st.columns(5)
-            with c1: g = st.text_input("", key=f"a_sib_g_{i}", placeholder="Gender/النوع", label_visibility="collapsed")
-            with c2: n = st.text_input("", key=f"a_sib_n_{i}", placeholder="Name/الاسم", label_visibility="collapsed")
-            with c3: a = st.text_input("", key=f"a_sib_a_{i}", placeholder="Age/السن", label_visibility="collapsed")
-            with c4: e = st.text_input("", key=f"a_sib_e_{i}", placeholder="Education/التعليم", label_visibility="collapsed")
-            with c5: nt = st.text_input("", key=f"a_sib_nt_{i}", placeholder="Notes/ملاحظات", label_visibility="collapsed")
+            with c1: g = st.text_input("", key=f"a_sib_g_{i}", value=st.session_state.get(f"a_sib_g_{i}",""), placeholder="Gender/النوع", label_visibility="collapsed")
+            with c2: n = st.text_input("", key=f"a_sib_n_{i}", value=st.session_state.get(f"a_sib_n_{i}",""), placeholder="Name/الاسم", label_visibility="collapsed")
+            with c3: a = st.text_input("", key=f"a_sib_a_{i}", value=st.session_state.get(f"a_sib_a_{i}",""), placeholder="Age/السن", label_visibility="collapsed")
+            with c4: e = st.text_input("", key=f"a_sib_e_{i}", value=st.session_state.get(f"a_sib_e_{i}",""), placeholder="Education/التعليم", label_visibility="collapsed")
+            with c5: nt = st.text_input("", key=f"a_sib_nt_{i}", value=st.session_state.get(f"a_sib_nt_{i}",""), placeholder="Notes/ملاحظات", label_visibility="collapsed")
             if n: siblings.append({"gender": g, "name": n, "age": a, "edu": e, "notes": nt})
         st.session_state["a_siblings"] = siblings
         nav(3, 5)
@@ -310,11 +320,11 @@ else:
         for i in range(1, 5):
             st.markdown(f"**Sibling {i} / الأخ/الأخت {i}**")
             c1, c2, c3, c4, c5 = st.columns(5)
-            with c1: g = st.text_input("", key=f"c_sib_g_{i}", placeholder="Gender/النوع", label_visibility="collapsed")
-            with c2: n = st.text_input("", key=f"c_sib_n_{i}", placeholder="Name/الاسم", label_visibility="collapsed")
-            with c3: a = st.text_input("", key=f"c_sib_a_{i}", placeholder="Age/السن", label_visibility="collapsed")
-            with c4: e = st.text_input("", key=f"c_sib_e_{i}", placeholder="Education/التعليم", label_visibility="collapsed")
-            with c5: nt = st.text_input("", key=f"c_sib_nt_{i}", placeholder="Notes/ملاحظات", label_visibility="collapsed")
+            with c1: g = st.text_input("", key=f"c_sib_g_{i}", value=st.session_state.get(f"c_sib_g_{i}",""), placeholder="Gender/النوع", label_visibility="collapsed")
+            with c2: n = st.text_input("", key=f"c_sib_n_{i}", value=st.session_state.get(f"c_sib_n_{i}",""), placeholder="Name/الاسم", label_visibility="collapsed")
+            with c3: a = st.text_input("", key=f"c_sib_a_{i}", value=st.session_state.get(f"c_sib_a_{i}",""), placeholder="Age/السن", label_visibility="collapsed")
+            with c4: e = st.text_input("", key=f"c_sib_e_{i}", value=st.session_state.get(f"c_sib_e_{i}",""), placeholder="Education/التعليم", label_visibility="collapsed")
+            with c5: nt = st.text_input("", key=f"c_sib_nt_{i}", value=st.session_state.get(f"c_sib_nt_{i}",""), placeholder="Notes/ملاحظات", label_visibility="collapsed")
             if n: siblings.append({"gender": g, "name": n, "age": a, "edu": e, "notes": nt})
         st.session_state["c_siblings"] = siblings
         ti("Sibling relationship with each other", "علاقة الأخوة ببعض", "c_sibling_rel")
@@ -390,11 +400,19 @@ else:
                 st.markdown(f"**{en}**")
                 st.markdown(f"*{ar}*")
             with col2:
-                ans = st.radio("", ["Yes/نعم", "No/لا", "N/A"],
-                               key=f"chk_{en[:20]}", horizontal=False, label_visibility="collapsed")
+                chk_key = f"chk_{en[:20]}"
+                chk_opts = ["Yes/نعم", "No/لا", "N/A"]
+                chk_cur = st.session_state.get(chk_key, "N/A")
+                chk_idx = chk_opts.index(chk_cur) if chk_cur in chk_opts else 2
+                ans = st.radio("", chk_opts, index=chk_idx,
+                               key=chk_key, horizontal=False, label_visibility="collapsed")
+                st.session_state[chk_key] = ans
             with col3:
-                note = st.text_input("Notes", key=f"chk_note_{en[:20]}",
+                chk_note_key = f"chk_note_{en[:20]}"
+                note = st.text_input("Notes", key=chk_note_key,
+                                     value=st.session_state.get(chk_note_key, ""),
                                      placeholder="Notes / ملاحظات", label_visibility="collapsed")
+                st.session_state[chk_note_key] = note
             checklist_results[en] = {"ar": ar, "answer": ans, "notes": note}
             st.divider()
 
