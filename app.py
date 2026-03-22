@@ -12,14 +12,14 @@ from email.mime.base import MIMEBase
 from email import encoders
 from datetime import date
 
-st.set_page_config(page_title="History Taking — Dr. Hany Elhennawy", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="أخذ التاريخ المرضي — د. هاني الحناوي", page_icon="🧠", layout="wide")
 st.markdown("""
 <style>
     .main-title{font-size:26px;font-weight:700;color:#1A5CB8;margin-bottom:2px}
     .sub-title{color:#888;font-size:13px;margin-bottom:20px}
     .sec-header{font-size:15px;font-weight:700;color:#1A5CB8;margin-top:22px;margin-bottom:8px;
                 border-bottom:2px solid #1A5CB8;padding-bottom:4px}
-    .field-label{font-size:13px;color:#333;margin-bottom:2px}
+    .field-label{font-size:13px;color:#222;margin-bottom:2px;font-weight:500}
 </style>""", unsafe_allow_html=True)
 
 RECIPIENT_EMAIL = "yusuf.a.abdelatti@gmail.com"
@@ -38,596 +38,587 @@ DOCTOR = {
 }
 
 with st.sidebar:
-    st.header("⚙️ Settings")
-    groq_key   = st.text_input("Groq API Key", type="password", placeholder="gsk_...")
-    st.caption("Get free key at [console.groq.com](https://console.groq.com)")
+    st.header("⚙️ الإعدادات")
+    groq_key   = st.text_input("مفتاح Groq API", type="password", placeholder="gsk_...")
+    st.caption("احصل على مفتاح مجاني من [console.groq.com](https://console.groq.com)")
     st.divider()
-    history_by = st.text_input("Psychologist Name / اسم الأخصائي")
+    history_by = st.text_input("اسم الأخصائي / Psychologist Name")
 
-st.markdown('<div class="main-title">🧠 History Taking Sheet</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Dr. Hany Elhennawy Clinic — Neuro-Psychiatry & Neurofeedback</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🧠 استمارة أخذ التاريخ المرضي</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">عيادة د. هاني الحناوي — طب وجراحة الأعصاب والنفس</div>', unsafe_allow_html=True)
 
-# ── HELPERS ──
-def sec(en, ar=""):
-    st.markdown(f'<div class="sec-header">{en}{" / "+ar if ar else ""}</div>', unsafe_allow_html=True)
+# ── مساعدات ──
+def sec(ar, en=""):
+    st.markdown(f'<div class="sec-header">{ar}{" / "+en if en else ""}</div>', unsafe_allow_html=True)
 
-def lbl(en, ar):
-    st.markdown(f'<div class="field-label"><b>{en}</b> / {ar}</div>', unsafe_allow_html=True)
+def lbl(ar, en=""):
+    txt = f"<b>{ar}</b>" + (f" / {en}" if en else "")
+    st.markdown(f'<div class="field-label">{txt}</div>', unsafe_allow_html=True)
 
-def ti(label_en, label_ar, key, placeholder=""):
-    lbl(label_en, label_ar)
+def ti(ar, en, key, placeholder=""):
+    lbl(ar, en)
     return st.text_input("", key=key, placeholder=placeholder, label_visibility="collapsed")
 
-def ta(label_en, label_ar, key, height=100):
-    lbl(label_en, label_ar)
+def ta(ar, en, key, height=100):
+    lbl(ar, en)
     return st.text_area("", key=key, height=height, label_visibility="collapsed")
 
-def rb(label_en, label_ar, opts, key):
-    lbl(label_en, label_ar)
+def rb(ar, en, opts, key):
+    lbl(ar, en)
     return st.radio("", opts, key=key, horizontal=True, label_visibility="collapsed")
 
-def sel(label_en, label_ar, opts, key):
-    lbl(label_en, label_ar)
+def sel(ar, en, opts, key):
+    lbl(ar, en)
     return st.selectbox("", opts, key=key, label_visibility="collapsed")
 
-def sv(d, key, default="—"):
+def ms(ar, en, opts, key):
+    lbl(ar, en)
+    return st.multiselect("", opts, key=key, label_visibility="collapsed")
+
+def sv(d, key, default="لم يُذكر"):
     v = d.get(key, "")
     if not v: return default
+    if isinstance(v, list): return "، ".join(v) if v else default
     v = str(v).strip()
-    return v if v and v not in ["—", "— اختر / Select —"] else default
+    return v if v and v not in ["—", "— اختر —", "لم يُذكر"] else default
 
-# ── MCQ OPTIONS ──
-NA           = "— اختر / Select —"
-YNA          = ["Yes / نعم", "No / لا", "N/A"]
-YN           = ["Yes / نعم", "No / لا"]
-GENDER_OPTS  = ["Male / ذكر", "Female / أنثى"]
-EDU_OPTS     = [NA,"Illiterate / أمي","Primary / ابتدائي","Preparatory / إعدادي",
-                "Secondary / ثانوي","University / جامعي","Postgraduate / دراسات عليا"]
-OCC_OPTS     = [NA,"Employed / موظف","Self-employed / أعمال حرة","Student / طالب",
-                "Housewife / ربة منزل","Retired / متقاعد","Unemployed / عاطل","Other / أخرى"]
-SOCIAL_OPTS  = [NA,"Single / أعزب","Married / متزوج","Divorced / مطلق","Widowed / أرمل","Separated / منفصل"]
-SMOKING_OPTS = ["Non-smoker / لا يدخن","Smoker / مدخن","Ex-smoker / توقف","Shisha / شيشة"]
-REFERRAL_OPTS= [NA,"Self / ذاتي","Family / الأسرة","Doctor / طبيب","Psychologist / أخصائي","School / مدرسة","Other / أخرى"]
-ALIVE_OPTS_M = ["Alive / حي","Deceased / متوفى","Unknown / غير معروف"]
-ALIVE_OPTS_F = ["Alive / حية","Deceased / متوفاة","Unknown / غير معروف"]
-CONS_OPTS    = [NA,"No / لا","First degree / الدرجة الأولى","Second degree / الدرجة الثانية","Third degree / الدرجة الثالثة"]
-PARENTS_REL  = [NA,"Good / جيدة","Average / متوسطة","Poor / سيئة","Separated / منفصلان","Divorced / مطلقان","One deceased / أحدهما متوفى"]
-MARQ_OPTS    = [NA,"Good / جيدة","Average / متوسطة","Poor / سيئة","Separated / منفصلان"]
-PRE_MAR      = [NA,"No prior relation / لا علاقة سابقة","Knew each other / تعارف فقط","Long relationship / علاقة طويلة","Arranged / مرتب"]
-ONSET_MODE   = [NA,"Sudden / مفاجئ","Gradual / تدريجي"]
-COURSE_OPTS  = [NA,"Continuous / مستمر","Episodic / نوبات","Improving / في تحسن","Worsening / في تدهور"]
-COMPLIANCE   = [NA,"Good / جيد","Poor / سيء","Irregular / غير منتظم","Refused / رافض"]
-INSIGHT_OPTS = [NA,"Full / كامل","Partial / جزئي","None / لا يوجد"]
-SLEEP_OPTS   = ["Normal / طبيعي","Insomnia / أرق","Hypersomnia / نوم زيادة","Disrupted / متقطع"]
-APPETITE_OPTS= ["Normal / طبيعي","Decreased / قلت","Increased / زادت"]
-SUICIDAL_OPTS= ["None / لا","Passive / أفكار سلبية","Active / أفكار نشطة","Plan / خطة"]
-SUBSTANCE_OPTS=[NA,"None / لا","Alcohol / كحول","Cannabis / حشيش","Pills / حبوب","Multiple / متعدد","Other / أخرى"]
-SIB_GENDER   = [NA,"Male / ذكر","Female / أنثى"]
-SIB_EDU      = [NA,"Kindergarten / روضة","Primary / ابتدائي","Preparatory / إعدادي",
-                "Secondary / ثانوي","University / جامعي","Graduate / خريج","Not in school / لا يدرس"]
-BIRTH_ORDER  = [NA,"1st / الأول","2nd / الثاني","3rd / الثالث","4th / الرابع","5th / الخامس","6th+ / السادس فأكثر","Only child / وحيد"]
-BIRTH_TYPE   = [NA,"Normal / طبيعي","C-Section / قيصري","Forceps / جفت","Vacuum / شفاط"]
-BIRTH_COMP   = [NA,"None / لا يوجد","Jaundice / صفراء","Incubator / حضانة","Asphyxia / اختناق","Low birth weight / وزن منخفض","Other / أخرى"]
-BF_OPTS      = [NA,"Breastfed / طبيعية","Formula / صناعية","Mixed / مختلطة"]
-MOTOR_OPTS   = [NA,"Normal / طبيعي","Delayed / متأخر","Early / مبكر"]
-SPEECH_OPTS  = [NA,"Normal / طبيعي","Delayed / متأخر","Absent / غائب","Regressed / تراجع"]
-VACC_OPTS    = [NA,"Complete / مكتمل","Incomplete / غير مكتمل","Unknown / غير معروف"]
-ACADEMIC_OPTS= ["Excellent / ممتاز","Good / جيد","Average / متوسط","Weak / ضعيف","Not in school / لا يدرس"]
-WANTED_OPTS  = ["Yes / نعم","No / لا","Unplanned / غير مخطط"]
-GENDER_DES   = ["Yes / نعم","No / لا","Didn't matter / لا فرق"]
-PUNISHMENT   = [NA,"Verbal / لفظي","Withdrawal of privileges / حرمان","Physical / جسدي","Ignoring / تجاهل","Mixed / مختلط"]
-STRESS_REACT = [NA,"Calm / هادئ","Crying / بكاء","Aggression / عدوان","Withdrawal / انسحاب","Mixed / مختلط"]
+# ── قوائم الاختيارات ──
+NA           = "— اختر —"
+نعم_لا_لاينطبق = ["نعم", "لا", "لا ينطبق"]
+نعم_لا      = ["نعم", "لا"]
+GENDER_AR    = ["ذكر", "أنثى"]
+EDU_AR       = [NA,"أمي","ابتدائي","إعدادي","ثانوي","جامعي","دراسات عليا"]
+OCC_AR       = [NA,"موظف حكومي","موظف قطاع خاص","أعمال حرة","طالب","ربة منزل","متقاعد","عاطل عن العمل","أخرى"]
+SOCIAL_AR    = [NA,"أعزب","متزوج","مطلق","أرمل","منفصل"]
+SMOKING_AR   = ["لا يدخن","مدخن","توقف عن التدخين","شيشة","تدخين وشيشة"]
+REFERRAL_AR  = [NA,"ذاتي","الأسرة","طبيب","أخصائي نفسي","مدرسة","أخرى"]
+HTYPE_AR     = [NA,"أولي / Initial","متابعة / Follow-up","طارئ / Emergency","استشاري / Consultation"]
+ALIVE_M      = ["على قيد الحياة","متوفى","غير معروف"]
+ALIVE_F      = ["على قيد الحياة","متوفاة","غير معروف"]
+CONS_AR      = [NA,"لا توجد قرابة","درجة أولى","درجة ثانية","درجة ثالثة"]
+PARENTS_REL  = [NA,"جيدة","متوسطة","سيئة","منفصلان","مطلقان","أحدهما متوفى"]
+MARQ_AR      = [NA,"جيدة","متوسطة","سيئة","منفصلان"]
+PRE_MAR      = [NA,"لا توجد علاقة سابقة","تعارف فقط","علاقة طويلة","زواج مرتب","أخرى"]
+NUM_CHILD    = [NA,"لا يوجد أبناء","1","2","3","4","5","6 فأكثر"]
+MARRIAGE_DUR = [NA,"أقل من سنة","1-3 سنوات","3-5 سنوات","5-10 سنوات","أكثر من 10 سنوات"]
+ENGAGEMENT   = [NA,"لم تكن هناك خطوبة","أقل من 3 أشهر","3-6 أشهر","6-12 شهراً","أكثر من سنة"]
+ONSET_MODE   = [NA,"مفاجئ","تدريجي"]
+COURSE_AR    = [NA,"مستمر","نوبات متكررة","في تحسن","في تدهور","متذبذب"]
+COMPLIANCE   = [NA,"ملتزم","غير منتظم","غير ملتزم","رافض"]
+INSIGHT_AR   = [NA,"كاملة","جزئية","غائبة"]
+SLEEP_AR     = ["طبيعي","أرق","نوم زيادة","متقطع"]
+APPETITE_AR  = ["طبيعية","قلت","زادت"]
+SUICIDAL_AR  = ["لا توجد","أفكار سلبية فقط","أفكار نشطة","خطة واضحة"]
+SUBSTANCE_AR = [NA,"لا يوجد","كحول","حشيش","حبوب مهدئة","متعدد","أخرى"]
+HOBBIES_AR   = ["قراءة","رياضة","موسيقى","رسم","طبخ","ألعاب إلكترونية","تواصل اجتماعي","لا توجد","أخرى"]
+CHRONIC_AR   = [NA,"لا يوجد","سكري","ضغط","أمراض قلب","أمراض كلى","أمراض مناعية","سرطان","أخرى"]
+SIB_GENDER   = [NA,"ذكر","أنثى"]
+SIB_EDU      = [NA,"روضة","ابتدائي","إعدادي","ثانوي","جامعي","خريج","لا يدرس"]
+SIB_REL      = [NA,"جيدة","متوسطة","تنافسية","صراع مستمر","إهمال متبادل"]
+BIRTH_ORDER  = [NA,"الأول","الثاني","الثالث","الرابع","الخامس","السادس فأكثر","وحيد"]
+BIRTH_TYPE   = [NA,"طبيعي","قيصري","بالجفت","بالشفاط"]
+BIRTH_COMP   = [NA,"لا يوجد","صفراء","حضانة","اختناق","وزن منخفض","أخرى"]
+BF_AR        = [NA,"رضاعة طبيعية","رضاعة صناعية","مختلطة"]
+WEANING_AR   = [NA,"قبل 6 أشهر","6-12 شهراً","12-18 شهراً","18-24 شهراً","بعد سنتين"]
+MOTOR_AR     = [NA,"طبيعي","متأخر","مبكر"]
+SPEECH_AR    = [NA,"طبيعي","متأخر","غائب","تراجع بعد اكتمال"]
+TEETH_AR     = [NA,"طبيعي (6-8 أشهر)","مبكر (قبل 6 أشهر)","متأخر (بعد 12 شهراً)"]
+TOILET_AR    = [NA,"طبيعي (18-30 شهراً)","مبكر","متأخر (بعد 3 سنوات)"]
+VACC_AR      = [NA,"مكتمل","غير مكتمل","غير معروف"]
+ACADEMIC_AR  = ["ممتاز","جيد","متوسط","ضعيف","لا يدرس"]
+WANTED_AR    = ["نعم، مرغوب فيه","لا، لم يكن مرغوباً فيه","حمل غير مخطط"]
+GENDER_DES   = ["نعم، كان النوع مرغوباً","لا، كان يُفضَّل نوع آخر","لا فرق"]
+LIVES_WITH   = [NA,"مع الوالدين","مع الأم فقط","مع الأب فقط","مع الجدين","مع أحد الأقارب","أخرى"]
+SCREEN_AR    = [NA,"أقل من ساعة","1-2 ساعة","2-4 ساعات","4-6 ساعات","أكثر من 6 ساعات"]
+PREG_AR      = [NA,"حمل طبيعي بدون مشاكل","حمل مع ضغط","حمل مع سكري","حمل مع نزيف","حمل في سن متأخرة (>35)","حمل مع مشكلة أخرى"]
+PUNISHMENT   = [NA,"لفظي فقط","حرمان من الامتيازات","جسدي","تجاهل","مختلط"]
+STRESS_AR    = [NA,"هادئ","بكاء","عدوان","انسحاب واستقواء","مختلط"]
+SAME_SCH     = ["نعم","لا","لا ينطبق"]
 
-# ── SHEET TYPE ──
-sheet_type = st.radio("**Sheet Type / نوع الاستمارة**", ["👤 Adult / بالغ", "👶 Child / طفل"], horizontal=True)
-is_adult = "Adult" in sheet_type
+# ════════════════════════════════════════════════════════
+# نوع الاستمارة
+# ════════════════════════════════════════════════════════
+sheet_type = st.radio("**نوع الاستمارة / Sheet Type**", ["👤 بالغ / Adult", "👶 طفل / Child"], horizontal=True)
+is_adult = "بالغ" in sheet_type
 st.divider()
 d = {}
 
 # ════════════════════════════════════════════════════════
-#  ADULT SHEET
+#  استمارة البالغ
 # ════════════════════════════════════════════════════════
 if is_adult:
-    sec("Personal Details", "البيانات الشخصية")
+    sec("البيانات الشخصية", "Personal Details")
     c1, c2 = st.columns(2)
     with c1:
-        d["name"]       = ti("Full Name","الاسم","a_name")
-        d["age"]        = ti("Age","السن","a_age")
-        d["gender"]     = rb("Gender","النوع", GENDER_OPTS, "a_gender")
-        d["education"]  = sel("Education","المستوى التعليمي", EDU_OPTS, "a_edu")
-        d["occupation"] = sel("Occupation","الوظيفة", OCC_OPTS, "a_occ")
-        d["occ_detail"] = ti("Occupation details","تفاصيل الوظيفة","a_occd")
+        d["name"]       = ti("الاسم الكامل","Full Name","a_name")
+        d["age"]        = ti("السن","Age","a_age")
+        d["gender"]     = rb("النوع","Gender", GENDER_AR, "a_gender")
+        d["education"]  = sel("المستوى التعليمي","Education", EDU_AR, "a_edu")
+        d["occupation"] = sel("الوظيفة","Occupation", OCC_AR, "a_occ")
+        d["occ_detail"] = ti("تفاصيل الوظيفة (إن لزم)","Occupation details","a_occd")
+        d["hobbies"]    = ms("الهوايات","Hobbies", HOBBIES_AR, "a_hobbies")
     with c2:
-        d["social"]     = sel("Social Status","الحالة الاجتماعية", SOCIAL_OPTS, "a_social")
-        d["smoking"]    = sel("Smoking","التدخين", SMOKING_OPTS, "a_smoking")
-        d["referral"]   = sel("Referral Source","مصدر الإحالة", REFERRAL_OPTS, "a_referral")
-        d["phone"]      = ti("Phone","رقم الهاتف","a_phone")
-        d["hobbies"]    = ti("Hobbies","الهوايات","a_hobbies")
-        d["date"]       = ti("Date","التاريخ","a_date", placeholder=str(date.today()))
-        d["htype"]      = ti("History Type","نوع التاريخ","a_htype")
+        d["social"]     = sel("الحالة الاجتماعية","Social Status", SOCIAL_AR, "a_social")
+        d["smoking"]    = sel("التدخين","Smoking", SMOKING_AR, "a_smoking")
+        d["referral"]   = sel("مصدر الإحالة","Referral Source", REFERRAL_AR, "a_referral")
+        d["htype"]      = sel("نوع التاريخ","History Type", HTYPE_AR, "a_htype")
+        d["phone"]      = ti("رقم الهاتف","Phone","a_phone")
+        d["date"]       = ti("تاريخ الجلسة","Date","a_date", placeholder=str(date.today()))
 
-    sec("Family Details", "بيانات الأسرة")
+    sec("بيانات الأسرة", "Family Details")
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("**Father / الأب**")
-        d["father_name"]  = ti("Father Name","اسم الأب","a_fn")
-        d["father_age"]   = ti("Father Age","سن الأب","a_fa")
-        d["father_occ"]   = ti("Father Occupation","وظيفة الأب","a_fo")
-        d["father_alive"] = rb("Father status","حالة الأب", ALIVE_OPTS_M, "a_falive")
+        st.markdown("**الأب / Father**")
+        d["father_name"]  = ti("اسم الأب","Father Name","a_fn")
+        d["father_age"]   = ti("سن الأب","Father Age","a_fa")
+        d["father_occ"]   = sel("وظيفة الأب","Father Occupation", OCC_AR, "a_fo")
+        d["father_alive"] = rb("حالة الأب","Father status", ALIVE_M, "a_falive")
     with c2:
-        st.markdown("**Mother / الأم**")
-        d["mother_name"]  = ti("Mother Name","اسم الأم","a_mn")
-        d["mother_age"]   = ti("Mother Age","سن الأم","a_ma")
-        d["mother_occ"]   = ti("Mother Occupation","وظيفة الأم","a_mo")
-        d["mother_alive"] = rb("Mother status","حالة الأم", ALIVE_OPTS_F, "a_malive")
-    d["consanguinity"]    = sel("Consanguinity between parents","صلة القرابة بين الأب والأم", CONS_OPTS, "a_cons")
-    d["parents_together"] = rb("Parents living together?","الأبوان يعيشان معاً؟", YNA, "a_ptog")
-    d["chronic"]          = ti("Chronic illness in family","مرض مزمن في الأسرة","a_chronic")
+        st.markdown("**الأم / Mother**")
+        d["mother_name"]  = ti("اسم الأم","Mother Name","a_mn")
+        d["mother_age"]   = ti("سن الأم","Mother Age","a_ma")
+        d["mother_occ"]   = sel("وظيفة الأم","Mother Occupation", OCC_AR, "a_mo")
+        d["mother_alive"] = rb("حالة الأم","Mother status", ALIVE_F, "a_malive")
+    d["consanguinity"]    = sel("القرابة بين الأب والأم","Consanguinity", CONS_AR, "a_cons")
+    d["parents_together"] = rb("هل الأبوان يعيشان معاً؟","Parents living together?", نعم_لا_لاينطبق, "a_ptog")
+    d["chronic"]          = sel("مرض مزمن في الأسرة","Chronic illness in family", CHRONIC_AR, "a_chronic")
 
-    sec("Marriage Details", "بيانات الزواج")
+    sec("بيانات الزواج", "Marriage Details")
     c1, c2 = st.columns(2)
     with c1:
-        d["spouse_name"]   = ti("Spouse Name","اسم الزوج/الزوجة","a_spn")
-        d["spouse_age"]    = ti("Spouse Age","سن الزوج/الزوجة","a_spa")
-        d["spouse_occ"]    = ti("Spouse Occupation","وظيفة الزوج/الزوجة","a_spo")
-        d["marriage_dur"]  = ti("Marriage Duration","فترة الزواج","a_mdur")
+        d["spouse_name"]   = ti("اسم الزوج / الزوجة","Spouse Name","a_spn")
+        d["spouse_age"]    = ti("سن الزوج / الزوجة","Spouse Age","a_spa")
+        d["spouse_occ"]    = sel("وظيفة الزوج / الزوجة","Spouse Occupation", OCC_AR, "a_spo")
+        d["marriage_dur"]  = sel("مدة الزواج","Marriage Duration", MARRIAGE_DUR, "a_mdur")
     with c2:
-        d["engagement"]    = ti("Engagement Period","فترة الخطوبة","a_eng")
-        d["num_children"]  = ti("Number of Children","عدد الأبناء","a_nch")
-        d["katb"]          = rb("Katb Ketab / كتب كتاب","كتب كتاب قبل الزواج", ["Yes / نعم","No / لا","N/A"], "a_katb")
-        d["marriage_qual"] = sel("Marriage quality","جودة الزواج", MARQ_OPTS, "a_mqual")
-        d["pre_marriage"]  = sel("Relationship before marriage","العلاقة قبل الزواج", PRE_MAR, "a_pre")
+        d["engagement"]    = sel("فترة الخطوبة","Engagement Period", ENGAGEMENT, "a_eng")
+        d["num_children"]  = sel("عدد الأبناء","Number of Children", NUM_CHILD, "a_nch")
+        d["katb"]          = rb("كتب كتاب قبل الزواج؟","Katb Ketab?", ["نعم","لا","لا ينطبق"], "a_katb")
+        d["marriage_qual"] = sel("جودة العلاقة الزوجية","Marriage quality", MARQ_AR, "a_mqual")
+        d["pre_marriage"]  = sel("العلاقة قبل الزواج","Relationship before marriage", PRE_MAR, "a_pre")
 
-    sec("Brothers and Sisters", "الإخوة والأخوات")
+    sec("الإخوة والأخوات", "Brothers and Sisters")
     siblings = []
     for i in range(1, 5):
         c1,c2,c3,c4,c5 = st.columns(5)
         with c1:
-            lbl(f"Gender {i}","النوع"); g = st.selectbox("",SIB_GENDER,key=f"a_sg{i}",label_visibility="collapsed")
+            lbl(f"النوع {i}",""); g = st.selectbox("",SIB_GENDER,key=f"a_sg{i}",label_visibility="collapsed")
         with c2:
-            n = st.text_input("",key=f"a_sn{i}",placeholder=f"Name {i} / الاسم",label_visibility="collapsed")
+            n = st.text_input("",key=f"a_sn{i}",placeholder=f"الاسم {i}",label_visibility="collapsed")
         with c3:
-            a_s = st.text_input("",key=f"a_sa{i}",placeholder=f"Age {i} / السن",label_visibility="collapsed")
+            a_s = st.text_input("",key=f"a_sa{i}",placeholder=f"السن {i}",label_visibility="collapsed")
         with c4:
-            lbl(f"Education {i}","التعليم"); e = st.selectbox("",SIB_EDU,key=f"a_se{i}",label_visibility="collapsed")
+            lbl(f"التعليم {i}",""); e = st.selectbox("",SIB_EDU,key=f"a_se{i}",label_visibility="collapsed")
         with c5:
-            nt = st.text_input("",key=f"a_st{i}",placeholder=f"Notes {i} / ملاحظات",label_visibility="collapsed")
+            nt = st.text_input("",key=f"a_st{i}",placeholder=f"ملاحظات {i}",label_visibility="collapsed")
         if n: siblings.append({"gender":g,"name":n,"age":a_s,"edu":e,"notes":nt})
     d["siblings"] = siblings
 
-    sec("Complaints & History of Presenting Illness", "الشكاوى وتاريخ المرض الحالي")
-    d["onset"]      = ti("Onset — Since when?","متى بدأت الأعراض؟","a_onset")
-    d["onset_mode"] = sel("Mode of onset","طريقة البداية", ONSET_MODE, "a_omode")
-    d["course"]     = sel("Course of illness","مسار المرض", COURSE_OPTS, "a_course")
-    d["complaints"] = ta("Chief Complaints (C/O)","الشكاوى الرئيسية","a_co",120)
-    d["hpi"]        = ta("History of Presenting Illness (HPI)","تاريخ المرض الحالي بالتفصيل","a_hpi",220)
+    sec("الشكاوى وتاريخ المرض الحالي", "Complaints & HPI")
+    d["onset"]      = ti("متى بدأت الأعراض؟","Onset","a_onset")
+    d["onset_mode"] = sel("طريقة البداية","Mode of onset", ONSET_MODE, "a_omode")
+    d["course"]     = sel("مسار المرض","Course", COURSE_AR, "a_course")
+    d["complaints"] = ta("الشكاوى الرئيسية (C/O)","Chief Complaints",  "a_co",  120)
+    d["hpi"]        = ta("تاريخ المرض الحالي بالتفصيل (HPI)","HPI", "a_hpi", 220)
 
-    sec("Drug History", "تاريخ الأدوية")
-    d["on_meds"]    = rb("Currently on medication?","يتناول أدوية حالياً؟", YNA, "a_onmeds")
-    d["compliance"] = sel("Medication compliance","الالتزام بالأدوية", COMPLIANCE, "a_comp")
-    d["drug_hx"]    = ta("Medications (name, dose, duration)","الأدوية (الاسم، الجرعة، المدة)","a_drug",100)
+    sec("تاريخ الأدوية", "Drug History")
+    d["on_meds"]    = rb("هل يتناول أدوية حالياً؟","On medication?", نعم_لا_لاينطبق, "a_onmeds")
+    d["compliance"] = sel("الالتزام بالأدوية","Compliance", COMPLIANCE, "a_comp")
+    d["drug_hx"]    = ta("تفاصيل الأدوية (الاسم، الجرعة، المدة)","Medications", "a_drug", 100)
 
-    sec("Past History", "التاريخ المرضي السابق")
+    sec("التاريخ المرضي السابق", "Past History")
     c1,c2 = st.columns(2)
-    with c1:
-        d["prev_psych"] = rb("Previous psychiatric illness?","مرض نفسي سابق؟", YNA, "a_ppsych")
-    with c2:
-        d["prev_hosp"]  = rb("Previous hospitalization?","دخول مستشفى سابق؟", YNA, "a_phosp")
-    d["past_hx"]    = ta("Past history details","تفاصيل التاريخ السابق","a_past",80)
+    with c1: d["prev_psych"] = rb("مرض نفسي سابق؟","Previous psychiatric?", نعم_لا_لاينطبق, "a_ppsych")
+    with c2: d["prev_hosp"]  = rb("دخول مستشفى سابق؟","Previous hospitalization?", نعم_لا_لاينطبق, "a_phosp")
+    d["past_hx"] = ta("تفاصيل التاريخ السابق","Details","a_past",80)
 
-    sec("Family History", "التاريخ العائلي")
+    sec("التاريخ العائلي", "Family History")
     c1,c2 = st.columns(2)
-    with c1:
-        d["fam_psych"]  = rb("Psychiatric illness in family?","مرض نفسي في الأسرة؟", YNA, "a_fpsych")
-    with c2:
-        d["fam_neuro"]  = rb("Neurological illness in family?","مرض عصبي في الأسرة؟", YNA, "a_fneuro")
-    d["family_hx"]  = ta("Family history details","تفاصيل التاريخ العائلي","a_famhx",80)
+    with c1: d["fam_psych"]  = rb("مرض نفسي في الأسرة؟","Psychiatric in family?", نعم_لا_لاينطبق, "a_fpsych")
+    with c2: d["fam_neuro"]  = rb("مرض عصبي في الأسرة؟","Neurological in family?", نعم_لا_لاينطبق, "a_fneuro")
+    d["family_hx"] = ta("تفاصيل التاريخ العائلي","Details","a_famhx",80)
 
-    sec("Investigations", "الفحوصات")
-    d["had_inv"]       = rb("Investigations done?","تم إجراء فحوصات؟", YNA, "a_hadinv")
-    d["investigations"]= ta("Details (Lab, EEG, MRI, CT, etc.)","التفاصيل (تحاليل، رسم مخ، رنين...)","a_inv",80)
+    sec("الفحوصات", "Investigations")
+    d["had_inv"]       = rb("هل أُجريت فحوصات؟","Investigations done?", نعم_لا_لاينطبق, "a_hadinv")
+    d["investigations"]= ta("تفاصيل الفحوصات ونتائجها","Details","a_inv",80)
 
-    sec("Operations and Surgeries", "العمليات والجراحات")
-    d["had_surg"]   = rb("Previous surgeries?","عمليات جراحية سابقة؟", YNA, "a_hsurg")
-    d["surgeries"]  = ta("Surgical history details","تفاصيل العمليات الجراحية","a_surg",60)
+    sec("العمليات والجراحات", "Operations and Surgeries")
+    d["had_surg"]  = rb("عمليات جراحية سابقة؟","Previous surgeries?", نعم_لا_لاينطبق, "a_hsurg")
+    d["surgeries"] = ta("تفاصيل العمليات","Details","a_surg",60)
 
-    sec("Clinical Assessment", "التقييم السريري")
+    sec("التقييم السريري", "Clinical Assessment")
     c1, c2 = st.columns(2)
     with c1:
-        d["sleep"]     = sel("Sleep pattern","نمط النوم", SLEEP_OPTS, "a_sleep")
-        d["appetite"]  = sel("Appetite","الشهية", APPETITE_OPTS, "a_appetite")
-        d["suicidal"]  = sel("Suicidal ideation","أفكار انتحارية", SUICIDAL_OPTS, "a_suicidal")
-        d["insight"]   = sel("Insight","البصيرة / الاستبصار", INSIGHT_OPTS, "a_insight")
+        d["sleep"]     = sel("نمط النوم","Sleep", SLEEP_AR, "a_sleep")
+        d["appetite"]  = sel("الشهية","Appetite", APPETITE_AR, "a_appetite")
+        d["suicidal"]  = sel("أفكار انتحارية","Suicidal ideation", SUICIDAL_AR, "a_suicidal")
+        d["insight"]   = sel("البصيرة / الاستبصار","Insight", INSIGHT_AR, "a_insight")
     with c2:
-        d["substance"] = sel("Substance use","تعاطي مواد", SUBSTANCE_OPTS, "a_subs")
-        d["substance_details"] = ta("Substance details","تفاصيل المواد","a_subsd",60)
-    d["extra_notes"]= ta("Additional notes","ملاحظات إضافية","a_extra",80)
-
-    patient_name = d.get("name") or "Patient"
+        d["substance"] = sel("تعاطي مواد","Substance use", SUBSTANCE_AR, "a_subs")
+        d["substance_details"] = ta("تفاصيل المواد","Details","a_subsd",60)
+    d["extra_notes"]= ta("ملاحظات إضافية","Additional notes","a_extra",80)
+    patient_name = d.get("name") or "المريض"
 
 # ════════════════════════════════════════════════════════
-#  CHILD SHEET
+#  استمارة الطفل
 # ════════════════════════════════════════════════════════
 else:
-    sec("Personal Details", "البيانات الشخصية")
+    sec("البيانات الشخصية", "Personal Details")
     c1, c2 = st.columns(2)
     with c1:
-        d["name"]        = ti("Child's Full Name","اسم الطفل","c_name")
-        d["age"]         = ti("Age","السن","c_age")
-        d["gender"]      = rb("Gender","النوع", GENDER_OPTS, "c_gender")
-        d["school"]      = ti("School Name","اسم المدرسة","c_school")
-        d["grade"]       = ti("Grade / Year","الصف الدراسي","c_grade")
-        d["academic"]    = sel("Academic Performance","المستوى الدراسي", ACADEMIC_OPTS, "c_academic")
-        d["birth_order"] = sel("Birth order","ترتيب الميلاد", BIRTH_ORDER, "c_border")
+        d["name"]        = ti("اسم الطفل كاملاً","Child's Full Name","c_name")
+        d["age"]         = ti("السن","Age","c_age")
+        d["gender"]      = rb("النوع","Gender", GENDER_AR, "c_gender")
+        d["school"]      = ti("اسم المدرسة","School Name","c_school")
+        d["grade"]       = ti("الصف الدراسي","Grade","c_grade")
+        d["academic"]    = sel("المستوى الدراسي","Academic Performance", ACADEMIC_AR, "c_academic")
+        d["birth_order"] = sel("ترتيب الميلاد","Birth order", BIRTH_ORDER, "c_border")
     with c2:
-        d["lives_with"]  = ti("Who does child live with?","يعيش مع","c_lives")
-        d["phone"]       = ti("Phone","تليفون","c_phone")
-        d["date"]        = ti("Date","التاريخ","c_date", placeholder=str(date.today()))
-        d["screen_time"] = ti("Daily screen time","وقت الشاشة اليومي","c_screen")
-        d["wanted"]      = rb("Was the child wanted/planned?","هل كان مرغوباً فيه؟", WANTED_OPTS, "c_wanted")
-        d["gender_des"]  = rb("Was child's gender desired?","هل النوع كان مرغوباً؟", GENDER_DES, "c_gdes")
+        d["lives_with"]  = sel("يعيش مع","Lives with", LIVES_WITH, "c_lives")
+        d["phone"]       = ti("تليفون","Phone","c_phone")
+        d["date"]        = ti("تاريخ الجلسة","Date","c_date", placeholder=str(date.today()))
+        d["screen_time"] = sel("وقت الشاشة اليومي","Daily screen time", SCREEN_AR, "c_screen")
+        d["wanted"]      = rb("هل كان الطفل مرغوباً فيه؟","Was child wanted?", WANTED_AR, "c_wanted")
+        d["gender_des"]  = rb("هل كان النوع مرغوباً فيه؟","Was gender desired?", GENDER_DES, "c_gdes")
 
-    sec("Developmental Milestones", "مراحل النمو")
+    sec("مراحل النمو", "Developmental Milestones")
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown("**Pregnancy & Birth / الحمل والولادة**")
-        d["pregnancy"]   = ti("Pregnancy details","تفاصيل الحمل","c_preg")
-        d["birth_type"]  = sel("Birth type","نوع الولادة", BIRTH_TYPE, "c_btype")
-        d["birth_comp"]  = sel("Birth complications","مضاعفات الولادة", BIRTH_COMP, "c_bcomp")
-        d["vacc_status"] = sel("Vaccination status","التطعيمات", VACC_OPTS, "c_vacc")
-        d["vacc_comp"]   = ti("Post-vaccine complications","مضاعفات بعد التطعيم","c_vcomp")
+        st.markdown("**الحمل والولادة**")
+        d["pregnancy"]    = sel("تفاصيل الحمل","Pregnancy", PREG_AR, "c_preg")
+        d["birth_type"]   = sel("نوع الولادة","Birth type", BIRTH_TYPE, "c_btype")
+        d["birth_comp"]   = sel("مضاعفات الولادة","Birth complications", BIRTH_COMP, "c_bcomp")
+        d["vacc_status"]  = sel("التطعيمات","Vaccinations", VACC_AR, "c_vacc")
+        d["vacc_comp"]    = ti("مضاعفات بعد التطعيم (إن وجدت)","Post-vaccine comp.","c_vcomp")
     with c2:
-        st.markdown("**Feeding & Growth / التغذية والنمو**")
-        d["breastfeeding"]= sel("Breastfeeding","الرضاعة", BF_OPTS, "c_bf")
-        d["weaning"]      = ti("Weaning age","سن الفطام","c_wean")
-        d["motor"]        = sel("Motor development","النمو الحركي", MOTOR_OPTS, "c_motor")
-        d["motor_detail"] = ti("Motor details","تفاصيل الحركة","c_motord")
-        d["teething"]     = ti("Teething age","سن التسنين","c_teeth")
-        d["toilet"]       = ti("Toilet training age","سن تدريب دورة المياه","c_toilet")
+        st.markdown("**التغذية والنمو الحركي**")
+        d["breastfeeding"]= sel("الرضاعة","Breastfeeding", BF_AR, "c_bf")
+        d["weaning"]      = sel("سن الفطام","Weaning age", WEANING_AR, "c_wean")
+        d["motor"]        = sel("النمو الحركي","Motor development", MOTOR_AR, "c_motor")
+        d["motor_detail"] = ti("تفاصيل الحركة (مشي، جلوس...)","Motor details","c_motord")
+        d["teething"]     = sel("التسنين","Teething", TEETH_AR, "c_teeth")
+        d["toilet"]       = sel("تدريب دورة المياه","Toilet training", TOILET_AR, "c_toilet")
     with c3:
-        st.markdown("**Language & Cognition / اللغة والإدراك**")
-        d["speech"]       = sel("Speech development","الكلام", SPEECH_OPTS, "c_speech")
-        d["speech_detail"]= ti("Speech details","تفاصيل الكلام","c_speechd")
-        d["attention"]    = rb("Attention / الانتباه","الانتباه",["Normal/طبيعي","Impaired/ضعيف","N/A"],"c_attn")
-        d["concentration"]= rb("Concentration / التركيز","التركيز",["Normal/طبيعي","Impaired/ضعيف","N/A"],"c_conc")
-        d["comprehension"]= rb("Comprehension / الفهم","الفهم",["Normal/طبيعي","Impaired/ضعيف","N/A"],"c_comp")
-    d["dev_notes"]    = ta("Developmental notes","ملاحظات النمو","c_devnotes",80)
+        st.markdown("**اللغة والإدراك**")
+        d["speech"]       = sel("الكلام","Speech", SPEECH_AR, "c_speech")
+        d["speech_detail"]= ti("تفاصيل الكلام","Speech details","c_speechd")
+        d["attention"]    = rb("الانتباه","Attention",["طبيعي","ضعيف","لا ينطبق"],"c_attn")
+        d["concentration"]= rb("التركيز","Concentration",["طبيعي","ضعيف","لا ينطبق"],"c_conc")
+        d["comprehension"]= rb("الفهم والإدراك","Comprehension",["طبيعي","ضعيف","لا ينطبق"],"c_comp")
+    d["dev_notes"] = ta("ملاحظات النمو","Developmental notes","c_devnotes",80)
 
-    sec("Family Details", "بيانات الأسرة")
+    sec("بيانات الأسرة", "Family Details")
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("**Father / الأب**")
-        d["father_name"]      = ti("Father Name","اسم الأب","c_fn")
-        d["father_age"]       = ti("Father Age","سن الأب","c_fa")
-        d["father_occ"]       = ti("Father Occupation","وظيفة الأب","c_fo")
-        d["father_alive"]     = rb("Father status","حالة الأب", ALIVE_OPTS_M, "c_falive")
-        d["father_hereditary"]= ti("Father hereditary illness","مرض وراثي — الأب","c_fh")
+        st.markdown("**الأب / Father**")
+        d["father_name"]      = ti("اسم الأب","Father Name","c_fn")
+        d["father_age"]       = ti("سن الأب","Father Age","c_fa")
+        d["father_occ"]       = sel("وظيفة الأب","Father Occupation", OCC_AR, "c_fo")
+        d["father_alive"]     = rb("حالة الأب","Father status", ALIVE_M, "c_falive")
+        d["father_hereditary"]= ti("مرض وراثي عند الأب (إن وجد)","Father hereditary","c_fh")
     with c2:
-        st.markdown("**Mother / الأم**")
-        d["mother_name"]      = ti("Mother Name","اسم الأم","c_mn")
-        d["mother_age"]       = ti("Mother Age","سن الأم","c_ma")
-        d["mother_occ"]       = ti("Mother Occupation","وظيفة الأم","c_mo")
-        d["mother_alive"]     = rb("Mother status","حالة الأم", ALIVE_OPTS_F, "c_malive")
-        d["mother_hereditary"]= ti("Mother hereditary illness","مرض وراثي — الأم","c_mh")
-    d["consanguinity"] = sel("Consanguinity between parents","صلة القرابة بين الأب والأم", CONS_OPTS, "c_cons")
-    d["parents_rel"]   = sel("Parents relationship quality","علاقة الأب والأم ببعض", PARENTS_REL, "c_prel")
+        st.markdown("**الأم / Mother**")
+        d["mother_name"]      = ti("اسم الأم","Mother Name","c_mn")
+        d["mother_age"]       = ti("سن الأم","Mother Age","c_ma")
+        d["mother_occ"]       = sel("وظيفة الأم","Mother Occupation", OCC_AR, "c_mo")
+        d["mother_alive"]     = rb("حالة الأم","Mother status", ALIVE_F, "c_malive")
+        d["mother_hereditary"]= ti("مرض وراثي عند الأم (إن وجد)","Mother hereditary","c_mh")
+    d["consanguinity"] = sel("القرابة بين الأب والأم","Consanguinity", CONS_AR, "c_cons")
+    d["parents_rel"]   = sel("طبيعة العلاقة بين الأب والأم","Parents relationship", PARENTS_REL, "c_prel")
 
-    sec("Brothers and Sisters", "الإخوة والأخوات")
+    sec("الإخوة والأخوات", "Brothers and Sisters")
     siblings = []
     for i in range(1, 5):
         c1,c2,c3,c4,c5 = st.columns(5)
         with c1:
-            lbl(f"Gender {i}","النوع"); g = st.selectbox("",SIB_GENDER,key=f"c_sg{i}",label_visibility="collapsed")
+            lbl(f"النوع {i}",""); g = st.selectbox("",SIB_GENDER,key=f"c_sg{i}",label_visibility="collapsed")
         with c2:
-            n = st.text_input("",key=f"c_sn{i}",placeholder=f"Name {i} / الاسم",label_visibility="collapsed")
+            n = st.text_input("",key=f"c_sn{i}",placeholder=f"الاسم {i}",label_visibility="collapsed")
         with c3:
-            a_s = st.text_input("",key=f"c_sa{i}",placeholder=f"Age {i} / السن",label_visibility="collapsed")
+            a_s = st.text_input("",key=f"c_sa{i}",placeholder=f"السن {i}",label_visibility="collapsed")
         with c4:
-            lbl(f"Education {i}","التعليم"); e = st.selectbox("",SIB_EDU,key=f"c_se{i}",label_visibility="collapsed")
+            lbl(f"التعليم {i}",""); e = st.selectbox("",SIB_EDU,key=f"c_se{i}",label_visibility="collapsed")
         with c5:
-            nt = st.text_input("",key=f"c_st{i}",placeholder=f"Notes {i} / ملاحظات",label_visibility="collapsed")
+            nt = st.text_input("",key=f"c_st{i}",placeholder=f"ملاحظات {i}",label_visibility="collapsed")
         if n: siblings.append({"gender":g,"name":n,"age":a_s,"edu":e,"notes":nt})
     d["siblings"]    = siblings
-    d["sibling_rel"] = ti("Sibling relationship with each other","علاقة الأخوة ببعض","c_sibrel")
-    d["same_school"] = rb("Do siblings attend same school?","هل الأخوة في نفس المدرسة؟", ["Yes / نعم","No / لا","N/A"], "c_ssch")
+    d["sibling_rel"] = sel("علاقة الأخوة ببعض","Sibling relationship", SIB_REL, "c_sibrel")
+    d["same_school"] = rb("هل الأخوة في نفس المدرسة؟","Same school?", SAME_SCH, "c_ssch")
 
-    sec("Complaints & History of Presenting Illness", "الشكاوى وتاريخ المرض الحالي")
-    d["onset"]      = ti("Onset — Since when?","متى بدأت الأعراض؟","c_onset")
-    d["onset_mode"] = sel("Mode of onset","طريقة البداية", ONSET_MODE, "c_omode")
-    d["course"]     = sel("Course","مسار المرض", COURSE_OPTS, "c_course")
-    d["complaints"] = ta("Chief Complaints (C/O)","الشكاوى الرئيسية","c_co",120)
-    d["hpi"]        = ta("History of Presenting Illness (HPI)","تاريخ المرض الحالي","c_hpi",220)
+    sec("الشكاوى وتاريخ المرض الحالي", "Complaints & HPI")
+    d["onset"]      = ti("متى بدأت الأعراض؟","Onset","c_onset")
+    d["onset_mode"] = sel("طريقة البداية","Mode of onset", ONSET_MODE, "c_omode")
+    d["course"]     = sel("مسار المرض","Course", COURSE_AR, "c_course")
+    d["complaints"] = ta("الشكاوى الرئيسية (C/O)","Chief Complaints","c_co",120)
+    d["hpi"]        = ta("تاريخ المرض الحالي بالتفصيل (HPI)","HPI","c_hpi",220)
 
-    sec("Past History", "التاريخ المرضي السابق")
+    sec("التاريخ المرضي السابق", "Past History")
     c1, c2, c3 = st.columns(3)
     with c1:
-        d["high_fever"]   = rb("High fever ≥40°C?","حرارة ≥40 درجة؟", YNA, "c_hfever")
-        d["head_trauma"]  = rb("Head trauma?","ارتطام رأس؟", YNA, "c_htrauma")
+        d["high_fever"]   = rb("حرارة ≥40 درجة؟","High fever?", نعم_لا_لاينطبق, "c_hfever")
+        d["head_trauma"]  = rb("ارتطام رأس؟","Head trauma?", نعم_لا_لاينطبق, "c_htrauma")
     with c2:
-        d["convulsions"]  = rb("Convulsions / Seizures?","تشنجات؟", YNA, "c_conv")
-        d["post_vaccine"] = rb("Post-vaccine complications?","مضاعفات بعد التطعيم؟", YNA, "c_pvacc")
+        d["convulsions"]  = rb("تشنجات؟","Convulsions?", نعم_لا_لاينطبق, "c_conv")
+        d["post_vaccine"] = rb("مضاعفات بعد التطعيم؟","Post-vaccine comp.?", نعم_لا_لاينطبق, "c_pvacc")
     with c3:
-        d["prev_hosp"]    = rb("Previous hospitalization?","دخول مستشفى سابق؟", YNA, "c_phosp")
-        d["prev_therapy"] = rb("Previous therapy sessions?","جلسات علاجية سابقة؟", YNA, "c_pther")
-    d["past_hx"]   = ta("Past history details","تفاصيل التاريخ السابق","c_past",100)
+        d["prev_hosp"]    = rb("دخول مستشفى سابق؟","Previous hospitalization?", نعم_لا_لاينطبق, "c_phosp")
+        d["prev_therapy"] = rb("جلسات علاجية سابقة؟","Previous therapy?", نعم_لا_لاينطبق, "c_pther")
+    d["past_hx"] = ta("تفاصيل التاريخ السابق","Details","c_past",100)
 
-    sec("Family History", "التاريخ العائلي")
+    sec("التاريخ العائلي", "Family History")
     c1, c2 = st.columns(2)
     with c1:
-        d["fam_psych"]   = rb("Psychiatric illness in family?","مرض نفسي في الأسرة؟", YNA, "c_fpsych")
-        d["fam_neuro"]   = rb("Neurological illness in family?","مرض عصبي في الأسرة؟", YNA, "c_fneuro")
+        d["fam_psych"]   = rb("مرض نفسي في الأسرة؟","Psychiatric in family?", نعم_لا_لاينطبق, "c_fpsych")
+        d["fam_neuro"]   = rb("مرض عصبي في الأسرة؟","Neurological in family?", نعم_لا_لاينطبق, "c_fneuro")
     with c2:
-        d["fam_mr"]      = rb("Intellectual disability in family?","إعاقة ذهنية في الأسرة؟", YNA, "c_fmr")
-        d["fam_epilepsy"]= rb("Epilepsy in family?","صرع في الأسرة؟", YNA, "c_fepil")
-    d["family_hx"]  = ta("Family history details","تفاصيل التاريخ العائلي","c_famhx",80)
+        d["fam_mr"]      = rb("إعاقة ذهنية في الأسرة؟","MR in family?", نعم_لا_لاينطبق, "c_fmr")
+        d["fam_epilepsy"]= rb("صرع في الأسرة؟","Epilepsy in family?", نعم_لا_لاينطبق, "c_fepil")
+    d["family_hx"] = ta("تفاصيل التاريخ العائلي","Details","c_famhx",80)
 
-    sec("Investigations", "الفحوصات")
+    sec("الفحوصات", "Investigations")
     c1, c2, c3 = st.columns(3)
     with c1:
-        d["had_ct"]   = rb("CT scan?","أشعة مقطعية؟", YNA, "c_ct")
-        d["had_mri"]  = rb("MRI?","رنين مغناطيسي؟", YNA, "c_mri")
+        d["had_ct"]   = rb("أشعة مقطعية؟","CT?", نعم_لا_لاينطبق, "c_ct")
+        d["had_mri"]  = rb("رنين مغناطيسي؟","MRI?", نعم_لا_لاينطبق, "c_mri")
     with c2:
-        d["had_eeg"]  = rb("EEG?","رسم مخ؟", YNA, "c_eeg")
-        d["had_iq"]   = rb("IQ test (SB5)?","اختبار ذكاء SB5؟", YNA, "c_iq")
+        d["had_eeg"]  = rb("رسم مخ (EEG)؟","EEG?", نعم_لا_لاينطبق, "c_eeg")
+        d["had_iq"]   = rb("اختبار ذكاء SB5؟","IQ test?", نعم_لا_لاينطبق, "c_iq")
     with c3:
-        d["had_cars"] = rb("CARS?","CARS؟", YNA, "c_cars")
-        d["cars_score"]= ti("CARS score (if done)","درجة CARS","c_carsscore")
-    d["investigations"]= ta("Investigation details & results","تفاصيل الفحوصات والنتائج","c_inv",80)
+        d["had_cars"] = rb("مقياس CARS؟","CARS?", نعم_لا_لاينطبق, "c_cars")
+        d["cars_score"]= ti("درجة CARS (إن أُجري)","CARS score","c_carsscore")
+    d["investigations"]= ta("تفاصيل الفحوصات ونتائجها","Details","c_inv",80)
 
-    sec("Operations and Surgeries", "العمليات والجراحات")
-    d["had_surg"]  = rb("Previous surgeries?","عمليات جراحية سابقة؟", YNA, "c_hsurg")
-    d["surgeries"] = ta("Surgical history details","تفاصيل العمليات","c_surg",60)
+    sec("العمليات والجراحات", "Operations and Surgeries")
+    d["had_surg"]  = rb("عمليات جراحية سابقة؟","Previous surgeries?", نعم_لا_لاينطبق, "c_hsurg")
+    d["surgeries"] = ta("تفاصيل العمليات","Details","c_surg",60)
 
-    sec("Clinical Assessment", "التقييم السريري")
+    sec("التقييم السريري", "Clinical Assessment")
     c1, c2 = st.columns(2)
     with c1:
-        d["sleep"]          = sel("Sleep pattern","نمط النوم", SLEEP_OPTS, "c_sleep")
-        d["appetite"]       = sel("Appetite","الشهية", APPETITE_OPTS, "c_appetite")
-        d["punishment"]     = sel("Punishment methods","طرق العقاب", PUNISHMENT, "c_punish")
-        d["stress_reaction"]= sel("Reaction to stress","رد الفعل تجاه الضغوط", STRESS_REACT, "c_stress")
+        d["sleep"]          = sel("نمط النوم","Sleep", SLEEP_AR, "c_sleep")
+        d["appetite"]       = sel("الشهية","Appetite", APPETITE_AR, "c_appetite")
+        d["punishment"]     = sel("طرق العقاب المستخدمة","Punishment methods", PUNISHMENT, "c_punish")
+        d["stress_reaction"]= sel("رد الفعل تجاه الضغوط","Reaction to stress", STRESS_AR, "c_stress")
     with c2:
-        d["therapy"]        = ta("Current therapy sessions","الجلسات الحالية (تخاطب، تنمية مهارات...)","c_therapy",80)
-    d["extra_notes"] = ta("Additional notes","ملاحظات إضافية","c_extra",80)
-
-    patient_name = d.get("name") or "Patient"
+        d["therapy"] = ta("الجلسات العلاجية الحالية","Current therapy sessions","c_therapy",80)
+    d["extra_notes"] = ta("ملاحظات إضافية","Additional notes","c_extra",80)
+    patient_name = d.get("name") or "الطفل"
 
 # ════════════════════════════════════════════════════════
-#  GENERATE BUTTON
+#  زر توليد التقرير
 # ════════════════════════════════════════════════════════
 st.divider()
-if st.button("✦ Generate Report / إنشاء التقرير", type="primary", use_container_width=True):
+if st.button("✦ توليد التقرير / Generate Report", type="primary", use_container_width=True):
     if not groq_key:
-        st.error("Please enter your Groq API key in the sidebar.")
+        st.error("الرجاء إدخال مفتاح Groq API في الشريط الجانبي.")
     else:
         siblings = d.get("siblings", [])
-        sibling_text = "\n".join([
-            f"  {i+1}. {sb['name']} | {sb['gender']} | Age: {sb['age']} | Education: {sb['edu']} | Notes: {sb['notes']}"
+        sib_text = "\n".join([
+            f"  {i+1}. {sb['name']} | {sb['gender']} | السن: {sb['age']} | التعليم: {sb['edu']} | ملاحظات: {sb['notes'] or 'لا يوجد'}"
             for i, sb in enumerate(siblings)
-        ]) or "None reported / لا يوجد"
+        ]) or "لا يوجد إخوة مُدخَلون"
 
         if is_adult:
             data_block = f"""
-PATIENT: {sv(d,'name')} | Age: {sv(d,'age')} | Gender: {sv(d,'gender')}
-Date: {sv(d,'date')} | History by: {history_by or '—'} | History type: {sv(d,'htype')}
-Phone: {sv(d,'phone')} | Referral: {sv(d,'referral')}
-Occupation: {sv(d,'occupation')} — {sv(d,'occ_detail')} | Education: {sv(d,'education')}
-Social Status: {sv(d,'social')} | Hobbies: {sv(d,'hobbies')} | Smoking: {sv(d,'smoking')}
+المريض: {sv(d,'name')} | السن: {sv(d,'age')} | النوع: {sv(d,'gender')}
+التاريخ: {sv(d,'date')} | الأخصائي: {history_by or 'لم يُذكر'} | نوع التاريخ: {sv(d,'htype')}
+الهاتف: {sv(d,'phone')} | مصدر الإحالة: {sv(d,'referral')}
+الوظيفة: {sv(d,'occupation')} — {sv(d,'occ_detail')} | التعليم: {sv(d,'education')}
+الحالة الاجتماعية: {sv(d,'social')} | التدخين: {sv(d,'smoking')}
+الهوايات: {sv(d,'hobbies')}
 
-FAMILY:
-Father: {sv(d,'father_name')} | Age: {sv(d,'father_age')} | Occ: {sv(d,'father_occ')} | Status: {sv(d,'father_alive')}
-Mother: {sv(d,'mother_name')} | Age: {sv(d,'mother_age')} | Occ: {sv(d,'mother_occ')} | Status: {sv(d,'mother_alive')}
-Consanguinity: {sv(d,'consanguinity')} | Parents living together: {sv(d,'parents_together')}
-Chronic illness in family: {sv(d,'chronic')}
+بيانات الأسرة:
+الأب: {sv(d,'father_name')} | السن: {sv(d,'father_age')} | الوظيفة: {sv(d,'father_occ')} | الحالة: {sv(d,'father_alive')}
+الأم: {sv(d,'mother_name')} | السن: {sv(d,'mother_age')} | الوظيفة: {sv(d,'mother_occ')} | الحالة: {sv(d,'mother_alive')}
+القرابة بين الأبوين: {sv(d,'consanguinity')} | يعيشان معاً: {sv(d,'parents_together')}
+مرض مزمن في الأسرة: {sv(d,'chronic')}
 
-MARRIAGE:
-Spouse: {sv(d,'spouse_name')} | Age: {sv(d,'spouse_age')} | Occ: {sv(d,'spouse_occ')}
-Duration: {sv(d,'marriage_dur')} | Engagement: {sv(d,'engagement')} | Katb Ketab: {sv(d,'katb')}
-Marriage quality: {sv(d,'marriage_qual')} | Pre-marriage relation: {sv(d,'pre_marriage')}
-Number of children: {sv(d,'num_children')}
+بيانات الزواج:
+الزوج/الزوجة: {sv(d,'spouse_name')} | السن: {sv(d,'spouse_age')} | الوظيفة: {sv(d,'spouse_occ')}
+مدة الزواج: {sv(d,'marriage_dur')} | فترة الخطوبة: {sv(d,'engagement')}
+كتب كتاب: {sv(d,'katb')} | جودة الزواج: {sv(d,'marriage_qual')} | العلاقة قبل الزواج: {sv(d,'pre_marriage')}
+عدد الأبناء: {sv(d,'num_children')}
 
-SIBLINGS:
-{sibling_text}
+الإخوة:
+{sib_text}
 
-ONSET: {sv(d,'onset')} | Mode: {sv(d,'onset_mode')} | Course: {sv(d,'course')}
-CHIEF COMPLAINTS (C/O):
+بداية الأعراض: {sv(d,'onset')} | طريقة البداية: {sv(d,'onset_mode')} | المسار: {sv(d,'course')}
+الشكاوى الرئيسية:
 {sv(d,'complaints')}
-HISTORY OF PRESENTING ILLNESS (HPI):
+تاريخ المرض الحالي:
 {sv(d,'hpi')}
 
-DRUG HISTORY:
-On medication: {sv(d,'on_meds')} | Compliance: {sv(d,'compliance')}
+الأدوية: يتناول أدوية حالياً: {sv(d,'on_meds')} | الالتزام: {sv(d,'compliance')}
+تفاصيل الأدوية:
 {sv(d,'drug_hx')}
 
-PAST HISTORY:
-Previous psychiatric illness: {sv(d,'prev_psych')} | Previous hospitalization: {sv(d,'prev_hosp')}
+التاريخ السابق: مرض نفسي سابق: {sv(d,'prev_psych')} | دخول مستشفى: {sv(d,'prev_hosp')}
 {sv(d,'past_hx')}
 
-FAMILY HISTORY:
-Psychiatric illness in family: {sv(d,'fam_psych')} | Neurological: {sv(d,'fam_neuro')}
+التاريخ العائلي: مرض نفسي: {sv(d,'fam_psych')} | مرض عصبي: {sv(d,'fam_neuro')}
 {sv(d,'family_hx')}
 
-INVESTIGATIONS:
-Done: {sv(d,'had_inv')}
+الفحوصات: أُجريت فحوصات: {sv(d,'had_inv')}
 {sv(d,'investigations')}
 
-SURGERIES:
-Previous surgeries: {sv(d,'had_surg')}
+الجراحات: عمليات سابقة: {sv(d,'had_surg')}
 {sv(d,'surgeries')}
 
-CLINICAL ASSESSMENT:
-Sleep: {sv(d,'sleep')} | Appetite: {sv(d,'appetite')}
-Suicidal ideation: {sv(d,'suicidal')} | Insight: {sv(d,'insight')}
-Substance use: {sv(d,'substance')} — {sv(d,'substance_details')}
-Additional notes: {sv(d,'extra_notes')}
+التقييم السريري:
+النوم: {sv(d,'sleep')} | الشهية: {sv(d,'appetite')} | الأفكار الانتحارية: {sv(d,'suicidal')} | البصيرة: {sv(d,'insight')}
+تعاطي المواد: {sv(d,'substance')} — {sv(d,'substance_details')}
+ملاحظات إضافية: {sv(d,'extra_notes')}
 """
         else:
             data_block = f"""
-CHILD: {sv(d,'name')} | Age: {sv(d,'age')} | Gender: {sv(d,'gender')}
-Date: {sv(d,'date')} | History by: {history_by or '—'}
-Phone: {sv(d,'phone')} | Lives with: {sv(d,'lives_with')}
-School: {sv(d,'school')} | Grade: {sv(d,'grade')} | Academic performance: {sv(d,'academic')}
-Birth order: {sv(d,'birth_order')} | Daily screen time: {sv(d,'screen_time')}
-Was child wanted: {sv(d,'wanted')} | Gender desired: {sv(d,'gender_des')}
+الطفل: {sv(d,'name')} | السن: {sv(d,'age')} | النوع: {sv(d,'gender')}
+التاريخ: {sv(d,'date')} | الأخصائي: {history_by or 'لم يُذكر'}
+الهاتف: {sv(d,'phone')} | يعيش مع: {sv(d,'lives_with')}
+المدرسة: {sv(d,'school')} | الصف: {sv(d,'grade')} | المستوى الدراسي: {sv(d,'academic')}
+ترتيب الميلاد: {sv(d,'birth_order')} | وقت الشاشة اليومي: {sv(d,'screen_time')}
+هل كان مرغوباً فيه: {sv(d,'wanted')} | النوع المرغوب: {sv(d,'gender_des')}
 
-DEVELOPMENTAL MILESTONES:
-Pregnancy: {sv(d,'pregnancy')} | Birth type: {sv(d,'birth_type')} | Birth complications: {sv(d,'birth_comp')}
-Vaccinations: {sv(d,'vacc_status')} | Post-vaccine complications: {sv(d,'vacc_comp')}
-Breastfeeding: {sv(d,'breastfeeding')} | Weaning age: {sv(d,'weaning')}
-Motor development: {sv(d,'motor')} — {sv(d,'motor_detail')}
-Teething: {sv(d,'teething')} | Toilet training: {sv(d,'toilet')}
-Speech: {sv(d,'speech')} — {sv(d,'speech_detail')}
-Attention: {sv(d,'attention')} | Concentration: {sv(d,'concentration')} | Comprehension: {sv(d,'comprehension')}
-Notes: {sv(d,'dev_notes')}
+مراحل النمو:
+الحمل: {sv(d,'pregnancy')} | نوع الولادة: {sv(d,'birth_type')} | مضاعفات الولادة: {sv(d,'birth_comp')}
+التطعيمات: {sv(d,'vacc_status')} | مضاعفات التطعيم: {sv(d,'vacc_comp')}
+الرضاعة: {sv(d,'breastfeeding')} | الفطام: {sv(d,'weaning')}
+النمو الحركي: {sv(d,'motor')} — {sv(d,'motor_detail')}
+التسنين: {sv(d,'teething')} | تدريب دورة المياه: {sv(d,'toilet')}
+الكلام: {sv(d,'speech')} — {sv(d,'speech_detail')}
+الانتباه: {sv(d,'attention')} | التركيز: {sv(d,'concentration')} | الفهم والإدراك: {sv(d,'comprehension')}
+ملاحظات النمو: {sv(d,'dev_notes')}
 
-FAMILY:
-Father: {sv(d,'father_name')} | Age: {sv(d,'father_age')} | Occ: {sv(d,'father_occ')} | Status: {sv(d,'father_alive')} | Hereditary illness: {sv(d,'father_hereditary')}
-Mother: {sv(d,'mother_name')} | Age: {sv(d,'mother_age')} | Occ: {sv(d,'mother_occ')} | Status: {sv(d,'mother_alive')} | Hereditary illness: {sv(d,'mother_hereditary')}
-Consanguinity: {sv(d,'consanguinity')} | Parents relationship: {sv(d,'parents_rel')}
+الأسرة:
+الأب: {sv(d,'father_name')} | السن: {sv(d,'father_age')} | الوظيفة: {sv(d,'father_occ')} | الحالة: {sv(d,'father_alive')} | مرض وراثي: {sv(d,'father_hereditary')}
+الأم: {sv(d,'mother_name')} | السن: {sv(d,'mother_age')} | الوظيفة: {sv(d,'mother_occ')} | الحالة: {sv(d,'mother_alive')} | مرض وراثي: {sv(d,'mother_hereditary')}
+القرابة: {sv(d,'consanguinity')} | طبيعة العلاقة الزوجية: {sv(d,'parents_rel')}
 
-SIBLINGS:
-{sibling_text}
-Sibling relationship: {sv(d,'sibling_rel')} | Same school: {sv(d,'same_school')}
+الإخوة:
+{sib_text}
+علاقة الأخوة ببعض: {sv(d,'sibling_rel')} | في نفس المدرسة: {sv(d,'same_school')}
 
-ONSET: {sv(d,'onset')} | Mode: {sv(d,'onset_mode')} | Course: {sv(d,'course')}
-CHIEF COMPLAINTS (C/O):
+بداية الأعراض: {sv(d,'onset')} | طريقة البداية: {sv(d,'onset_mode')} | المسار: {sv(d,'course')}
+الشكاوى الرئيسية:
 {sv(d,'complaints')}
-HISTORY OF PRESENTING ILLNESS (HPI):
+تاريخ المرض الحالي:
 {sv(d,'hpi')}
 
-PAST HISTORY:
-High fever ≥40°C: {sv(d,'high_fever')} | Head trauma: {sv(d,'head_trauma')}
-Convulsions: {sv(d,'convulsions')} | Post-vaccine complications: {sv(d,'post_vaccine')}
-Previous hospitalization: {sv(d,'prev_hosp')} | Previous therapy: {sv(d,'prev_therapy')}
+التاريخ السابق: حرارة ≥40: {sv(d,'high_fever')} | ارتطام رأس: {sv(d,'head_trauma')} | تشنجات: {sv(d,'convulsions')}
+مضاعفات بعد التطعيم: {sv(d,'post_vaccine')} | دخول مستشفى: {sv(d,'prev_hosp')} | جلسات سابقة: {sv(d,'prev_therapy')}
 {sv(d,'past_hx')}
 
-FAMILY HISTORY:
-Psychiatric: {sv(d,'fam_psych')} | Neurological: {sv(d,'fam_neuro')} | Intellectual disability: {sv(d,'fam_mr')} | Epilepsy: {sv(d,'fam_epilepsy')}
+التاريخ العائلي: مرض نفسي: {sv(d,'fam_psych')} | عصبي: {sv(d,'fam_neuro')} | إعاقة ذهنية: {sv(d,'fam_mr')} | صرع: {sv(d,'fam_epilepsy')}
 {sv(d,'family_hx')}
 
-INVESTIGATIONS:
-CT: {sv(d,'had_ct')} | MRI: {sv(d,'had_mri')} | EEG: {sv(d,'had_eeg')} | IQ(SB5): {sv(d,'had_iq')} | CARS: {sv(d,'had_cars')} — Score: {sv(d,'cars_score')}
+الفحوصات: CT: {sv(d,'had_ct')} | MRI: {sv(d,'had_mri')} | EEG: {sv(d,'had_eeg')} | SB5: {sv(d,'had_iq')} | CARS: {sv(d,'had_cars')} — الدرجة: {sv(d,'cars_score')}
 {sv(d,'investigations')}
 
-SURGERIES:
-Previous surgeries: {sv(d,'had_surg')}
-{sv(d,'surgeries')}
+الجراحات: {sv(d,'had_surg')} — {sv(d,'surgeries')}
 
-CLINICAL ASSESSMENT:
-Sleep: {sv(d,'sleep')} | Appetite: {sv(d,'appetite')}
-Punishment methods: {sv(d,'punishment')} | Reaction to stress: {sv(d,'stress_reaction')}
-Current therapy sessions: {sv(d,'therapy')}
-Additional notes: {sv(d,'extra_notes')}
+التقييم: النوم: {sv(d,'sleep')} | الشهية: {sv(d,'appetite')} | طرق العقاب: {sv(d,'punishment')} | رد الفعل: {sv(d,'stress_reaction')}
+الجلسات الحالية: {sv(d,'therapy')}
+ملاحظات إضافية: {sv(d,'extra_notes')}
 """
 
-        prompt = f"""أنت طبيب نفسي استشاري أول. بناءً على بيانات التاريخ المرضي أدناه، اكتب تقريراً سريرياً متكاملاً وفق الهيكل التالي تماماً.
+        prompt = f"""أنت طبيب نفسي استشاري أول متمرس. بناءً على بيانات التاريخ المرضي أدناه، اكتب تقريراً سريرياً متكاملاً باللغة العربية وفق الهيكل الآتي تماماً.
 
-قواعد صارمة:
-1. استخدم البيانات المُدخلة فقط — لا تخترع أي معلومة
-2. كل قسم يُكتب بالعربية أولاً ثم الإنجليزية مباشرة بعده
-3. إذا كان الحقل "—" اكتب "لم يُذكر / Not reported"
-4. الأقسام التي تحتوي على نصوص مكتوبة (مثل HPI والشكاوى) يجب نقلها حرفياً كما كُتبت
+قواعد صارمة لا تحيد عنها:
+١. اكتب التقرير كاملاً باللغة العربية فقط
+٢. حوّل كل إجابة "نعم/لا" إلى جملة سردية كاملة مفصّلة (مثال: بدلاً من "التشنجات: نعم" اكتب "يُشار إلى وجود تشنجات في التاريخ المرضي السابق")
+٣. النصوص المكتوبة في الشكاوى وHPI تُنقل حرفياً كما كُتبت
+٤. لا تخترع أي معلومة غير موجودة في البيانات
+٥. إذا كان الحقل "لم يُذكر" فاذكره باختصار دون التوسع
+٦. اجعل التقرير سردياً تفصيلياً وليس قائمة أسئلة وإجابات
 
-══════════════════════════════════════════════════
-القسم الأول: ورقة التعريف / IDENTIFICATION SHEET
-══════════════════════════════════════════════════
-اعرض البيانات في جدول منظم بثلاثة أعمدة:
-| Field | الحقل | Value |
+══════════════════════════════════════════════
+ملخص سريع
+══════════════════════════════════════════════
+اكتب فقرة افتتاحية موجزة (3-4 جمل) تلخص أبرز ما في الحالة: من المريض، ما الشكوى الرئيسية، ومتى بدأت، ولماذا جاء اليوم.
 
-تضمن: الاسم، السن، النوع، التاريخ، الأخصائي، نوع التاريخ، الهاتف، مصدر الإحالة، الوظيفة، التعليم، الحالة الاجتماعية، الهوايات، التدخين {"، حالة الأبوين، القرابة، الزواج، عدد الأبناء" if is_adult else "، المدرسة، الصف، المستوى الدراسي، ترتيب الميلاد، وقت الشاشة، يعيش مع"}
+══════════════════════════════════════════════
+القسم الأول: بيانات التعريف
+══════════════════════════════════════════════
+اعرض البيانات الأساسية في جدول منظم بعمودين (الحقل | القيمة).
+تضمّن: الاسم، السن، النوع، التاريخ، الأخصائي، نوع التاريخ، الهاتف، مصدر الإحالة، الوظيفة، التعليم، الحالة الاجتماعية، التدخين، الهوايات {"، بيانات الزواج، عدد الأبناء" if is_adult else "، المدرسة، الصف، المستوى الدراسي، ترتيب الميلاد، وقت الشاشة، يعيش مع"}
 
-══════════════════════════════════════════════════
-القسم الثاني: الشكوى الرئيسية وتاريخ المرض / C/O & HPI
-══════════════════════════════════════════════════
-اكتب هذا القسم بالعربية أولاً ثم الإنجليزية:
+══════════════════════════════════════════════
+القسم الثاني: الشكوى الرئيسية وتاريخ المرض الحالي
+══════════════════════════════════════════════
+اكتب هذا القسم كسرد سريري متكامل:
+- ابدأ بالشكوى الرئيسية بنصها كما وردت
+- اذكر متى بدأت الأعراض وطريقة بدئها ومسارها حتى الآن
+- ثم انقل تاريخ المرض الحالي كما كُتب بالتفصيل
 
-الشكوى الرئيسية / Chief Complaint:
-[انقل نص الشكاوى حرفياً كما كُتب]
+══════════════════════════════════════════════
+{"القسم الثالث: بيانات الأسرة والزواج" if is_adult else "القسم الثالث: بيانات الأسرة ومراحل النمو"}
+══════════════════════════════════════════════
+{"اكتب سرداً سريرياً متكاملاً يغطي: بيانات الأب والأم والعلاقة بينهما، القرابة، الزواج وجودته، الأبناء، الإخوة وعلاقتهم ببعض، والمرض المزمن في الأسرة." if is_adult else """اكتب هذا القسم في جزأين:
+أ) بيانات الأسرة: سرد سريري يغطي بيانات الأب والأم والعلاقة بينهما، القرابة، الإخوة وعلاقتهم ببعض. اذكر هل كان الطفل مرغوباً فيه وهل كان نوعه مرغوباً.
+ب) مراحل النمو: اعرض مراحل النمو في جدول واضح يتضمن (الحمل، الولادة، الرضاعة، الفطام، الحركة، التسنين، الكلام، تدريب دورة المياه، التطعيمات، الانتباه والتركيز والفهم). اذكر هل كل مرحلة طبيعية أم متأخرة مع التفصيل."""}
 
-تاريخ المرض الحالي / History of Presenting Illness:
-[انقل نص HPI حرفياً كما كُتب، مع ذكر بداية الأعراض وطريقة البداية ومسار المرض]
+══════════════════════════════════════════════
+القسم الرابع: التاريخ المرضي
+══════════════════════════════════════════════
+اكتب كل قسم فرعي كفقرة سردية مستقلة:
 
-══════════════════════════════════════════════════
-{"القسم الثالث: بيانات الأسرة والزواج / FAMILY & MARRIAGE" if is_adult else "القسم الثالث: بيانات الأسرة والنمو / FAMILY & DEVELOPMENT"}
-══════════════════════════════════════════════════
-اكتب بالعربية أولاً ثم الإنجليزية:
+{"**تاريخ الأدوية:** اذكر هل يتناول المريض أدوية، ومدى التزامه، وتفاصيل الأدوية إن وُجدت." if is_adult else "**التاريخ المرضي السابق:** اذكر كل ما يخص الحوادث السابقة (الحرارة، الارتطام، التشنجات، مضاعفات التطعيم، دخول المستشفى، الجلسات السابقة) في جمل سردية مفصّلة."}
 
-{"بيانات الأسرة: اعرض بيانات الأب والأم والأخوة والزواج في صورة سردية سريرية منظمة" if is_adult else "بيانات الأسرة: اعرض بيانات الأب والأم والأخوة في صورة سردية سريرية منظمة"}
-{"" if is_adult else "مراحل النمو: اعرض مراحل النمو (الحمل، الولادة، الرضاعة، الحركة، الكلام، التطعيمات، التدريب) في صورة جدول واضح"}
+{"**التاريخ المرضي السابق:** اذكر هل كان هناك مرض نفسي سابق أو دخول مستشفى في جمل سردية." if is_adult else ""}
 
-══════════════════════════════════════════════════
-القسم الرابع: التاريخ المرضي / MEDICAL HISTORY
-══════════════════════════════════════════════════
-اكتب بالعربية أولاً ثم الإنجليزية. اعرض كل قسم فرعي بوضوح:
+**التاريخ العائلي:** اذكر الأمراض النفسية والعصبية{"والإعاقة الذهنية والصرع " if not is_adult else ""}في الأسرة بصياغة سردية كاملة.
 
-{"تاريخ الأدوية / Drug History:" if is_adult else "التاريخ المرضي السابق / Past History:"}
-[انقل النص حرفياً مع ذكر النتائج الرئيسية للاختيارات]
+**الفحوصات والعمليات:** اذكر ما أُجري من فحوصات{"(CT, MRI, EEG, SB5, CARS مع الدرجة)" if not is_adult else ""} وعمليات جراحية بأسلوب سردي.
 
-{"التاريخ السابق / Past History:" if is_adult else "التاريخ العائلي / Family History:"}
-[انقل النص حرفياً]
+══════════════════════════════════════════════
+القسم الخامس: التقييم السريري
+══════════════════════════════════════════════
+اكتب فقرة سردية تغطي جميع عناصر التقييم السريري:
+{"النوم، الشهية، الأفكار الانتحارية، البصيرة، تعاطي المواد. اذكر كل عنصر في جملة سردية كاملة." if is_adult else "النوم، الشهية، طرق العقاب المستخدمة، رد الفعل تجاه الضغوط، الجلسات العلاجية الحالية. اذكر كل عنصر في جملة سردية كاملة."}
+أضف الملاحظات الإضافية إن وجدت.
 
-{"التاريخ العائلي / Family History:" if is_adult else "الفحوصات / Investigations:"}
-[انقل النص حرفياً]
+══════════════════════════════════════════════
+القسم السادس: الملخص والانطباع السريري
+══════════════════════════════════════════════
+اكتب قسمين:
 
-{"الفحوصات / Investigations:" if is_adult else "العمليات / Surgeries:"}
-[انقل النص حرفياً]
+**الملخص السريري:** فقرة سردية متكاملة تجمع أبرز ما ورد في التاريخ المرضي بأسلوب طبي احترافي.
 
-{"العمليات / Surgeries:" if is_adult else ""}
-[انقل النص حرفياً]
+**الانطباع السريري:** فقرة تُبرز النقاط الجوهرية التي تستحق الانتباه من المنظور النفسي والعصبي — دون وضع تشخيص نهائي.
 
-══════════════════════════════════════════════════
-القسم الخامس: التقييم السريري / CLINICAL ASSESSMENT
-══════════════════════════════════════════════════
-اكتب بالعربية أولاً ثم الإنجليزية:
-
-اعرض النتائج السريرية (النوم، الشهية، {"الأفكار الانتحارية، البصيرة، تعاطي المواد" if is_adult else "طرق العقاب، رد الفعل، الجلسات"}) في جدول واضح، ثم اكتب فقرة تفسيرية.
-{"" if is_adult else "اذكر نتائج الاختبارات (CARS, SB5, CT, MRI, EEG) بوضوح."}
-ملاحظات إضافية: [انقل النص حرفياً]
-
-══════════════════════════════════════════════════
-القسم السادس: الملخص والانطباع السريري / SUMMARY & CLINICAL IMPRESSION
-══════════════════════════════════════════════════
-اكتب بالعربية أولاً ثم الإنجليزية:
-
-ملخص سريري / Clinical Summary:
-[فقرة سردية متكاملة تلخص أبرز ما في التاريخ المرضي — مبنية على البيانات الفعلية فقط]
-
-الانطباع السريري / Clinical Impression:
-[انطباع سريري موضوعي بناءً على جميع المعطيات — لا تضع تشخيصاً نهائياً، بل أبرز النقاط الرئيسية التي تستحق الانتباه]
-
-══════════════════════════════════════════════════
-HISTORY DATA:
+══════════════════════════════════════════════
+بيانات التاريخ المرضي:
 {data_block}
-══════════════════════════════════════════════════
-History by: {history_by or '—'} | Sheet: {"Adult / بالغ" if is_adult else "Child / طفل"}
+══════════════════════════════════════════════
+الأخصائي: {history_by or 'لم يُذكر'} | نوع الاستمارة: {"بالغ" if is_adult else "طفل"}
 """
 
-        with st.spinner("Generating report... / جاري إنشاء التقرير..."):
+        with st.spinner("جاري إنشاء التقرير..."):
             try:
                 client = Groq(api_key=groq_key)
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=3000
+                    max_tokens=3500
                 )
-                st.session_state["report_text"]       = response.choices[0].message.content
-                st.session_state["report_pname"]      = patient_name
-                st.session_state["report_sheet"]      = "Adult" if is_adult else "Child"
-                st.session_state["report_by"]         = history_by or "—"
+                st.session_state["report_text"] = response.choices[0].message.content
+                st.session_state["report_pname"]= patient_name
+                st.session_state["report_sheet"]= "بالغ" if is_adult else "طفل"
+                st.session_state["report_by"]   = history_by or "—"
             except Exception as e:
-                st.error(f"Error: {str(e)}")
+                st.error(f"خطأ: {str(e)}")
 
 # ════════════════════════════════════════════════════════
-#  SHOW REPORT
+#  عرض التقرير
 # ════════════════════════════════════════════════════════
 if st.session_state.get("report_text"):
-    rt   = st.session_state["report_text"]
-    pn   = st.session_state.get("report_pname","Patient")
-    rs   = st.session_state.get("report_sheet","")
-    rb_  = st.session_state.get("report_by","—")
-    fn   = f"{pn.replace(' ','_')}_HistorySheet.docx"
+    rt  = st.session_state["report_text"]
+    pn  = st.session_state.get("report_pname","المريض")
+    rs  = st.session_state.get("report_sheet","")
+    rb_ = st.session_state.get("report_by","—")
+    fn  = f"{pn.replace(' ','_')}_HistorySheet.docx"
 
     st.divider()
-    st.markdown("### ✅ Report Generated / تم إنشاء التقرير")
+    st.markdown("### ✅ تم إنشاء التقرير")
     st.text_area("", value=rt, height=600, label_visibility="collapsed")
 
     def build_docx(rt, pn, rs, rb_, logo_path, doctor):
@@ -660,15 +651,15 @@ if st.session_state.get("report_text"):
         p_top.paragraph_format.space_before=Pt(0); p_top.paragraph_format.space_after=Pt(6)
         if os.path.exists(logo_path):
             p_top.add_run().add_picture(logo_path,width=Inches(1.2))
-        r_t=p_top.add_run("   Clinical History Report")
-        r_t.font.name="Arial"; r_t.font.size=Pt(20); r_t.font.bold=True; r_t.font.color.rgb=CLINIC_BLUE
+        r_t=p_top.add_run("   التقرير السريري للتاريخ المرضي")
+        r_t.font.name="Arial"; r_t.font.size=Pt(18); r_t.font.bold=True; r_t.font.color.rgb=CLINIC_BLUE
         pPr=p_top._p.get_or_add_pPr(); pBdr=OxmlElement('w:pBdr')
         bot=OxmlElement('w:bottom'); bot.set(qn('w:val'),'single')
         bot.set(qn('w:sz'),'8'); bot.set(qn('w:space'),'4'); bot.set(qn('w:color'),'1A5CB8')
         pBdr.append(bot); pPr.append(pBdr)
         doc.add_paragraph()
         p_i=doc.add_paragraph()
-        for label,val in [("Patient: ",pn),("   |   Type: ",rs),("   |   History by: ",rb_)]:
+        for label,val in [("المريض: ",pn),("   |   النوع: ",rs),("   |   الأخصائي: ",rb_)]:
             r=p_i.add_run(label); r.bold=True; r.font.size=Pt(11); r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
             r2=p_i.add_run(val); r2.font.size=Pt(11); r2.font.name="Arial"
         doc.add_paragraph()
@@ -682,29 +673,31 @@ if st.session_state.get("report_text"):
                 cells=[c.strip() for c in ls.strip('|').split('|')]
                 if all(set(c)<=set('-: ') for c in cells): continue
                 if not in_table:
-                    in_table=True; table=doc.add_table(rows=0,cols=3); table.style='Table Grid'
+                    in_table=True; table=doc.add_table(rows=0,cols=len(cells)); table.style='Table Grid'
                 row=table.add_row()
-                for i,ct in enumerate(cells[:3]):
-                    cell=row.cells[i]; cell.text=ct
-                    for para in cell.paragraphs:
-                        for run in para.runs: run.font.size=Pt(10); run.font.name="Arial"
+                for i,ct in enumerate(cells[:len(cells)]):
+                    if i < len(row.cells):
+                        cell=row.cells[i]; cell.text=ct
+                        for para in cell.paragraphs:
+                            for run in para.runs: run.font.size=Pt(10); run.font.name="Arial"
                 continue
             else: in_table=False; table=None
-            if ls.startswith('══') or ls.startswith('━'):
+            if ls.startswith('══'):
                 p=doc.add_paragraph(); pPr2=p._p.get_or_add_pPr(); pBdr2=OxmlElement('w:pBdr')
                 b2=OxmlElement('w:bottom'); b2.set(qn('w:val'),'single')
                 b2.set(qn('w:sz'),'6'); b2.set(qn('w:space'),'1'); b2.set(qn('w:color'),'1A5CB8')
                 pBdr2.append(b2); pPr2.append(pBdr2); continue
-            if ('القسم' in ls or 'SECTION' in ls or ('/' in ls and len(ls)<80 and ls.isupper())):
+            if 'القسم' in ls or 'ملخص سريع' in ls:
                 p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(14)
-                r=p.add_run(ls); r.bold=True; r.font.size=Pt(13); r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
+                r=p.add_run(ls.strip('#* ')); r.bold=True; r.font.size=Pt(13)
+                r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
                 pPr3=p._p.get_or_add_pPr(); pBdr3=OxmlElement('w:pBdr')
                 b3=OxmlElement('w:bottom'); b3.set(qn('w:val'),'single')
                 b3.set(qn('w:sz'),'4'); b3.set(qn('w:space'),'1'); b3.set(qn('w:color'),'1A5CB8')
                 pBdr3.append(b3); pPr3.append(pBdr3); continue
-            if ls.endswith(':') and len(ls)<80 and not ls.startswith('|'):
+            if ls.startswith('**') and ls.endswith('**'):
                 p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(8)
-                r=p.add_run(ls); r.bold=True; r.font.size=Pt(11); r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
+                r=p.add_run(ls.strip('*')); r.bold=True; r.font.size=Pt(11); r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
                 continue
             if ls.startswith('• ') or ls.startswith('- '):
                 p=doc.add_paragraph(style='List Bullet')
@@ -733,15 +726,15 @@ if st.session_state.get("report_text"):
     col1,col2,col3=st.columns(3)
     with col1:
         docx_buf=build_docx(rt,pn,rs,rb_,LOGO_PATH,DOCTOR)
-        st.download_button("📄 Download .docx",data=docx_buf,file_name=fn,
+        st.download_button("📄 تحميل Word",data=docx_buf,file_name=fn,
                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     with col2:
-        if st.button("📧 Send to Email / إرسال بالبريد"):
+        if st.button("📧 إرسال بالبريد"):
             try:
                 docx_buf2=build_docx(rt,pn,rs,rb_,LOGO_PATH,DOCTOR)
                 msg=MIMEMultipart(); msg['From']=GMAIL_USER; msg['To']=RECIPIENT_EMAIL
-                msg['Subject']=f"History Report — {pn}"
-                msg.attach(MIMEText(f"History report for: {pn}\nType: {rs}\nBy: {rb_}",'plain'))
+                msg['Subject']=f"تقرير التاريخ المرضي — {pn}"
+                msg.attach(MIMEText(f"التقرير المرفق خاص بـ: {pn}\nالنوع: {rs}\nالأخصائي: {rb_}",'plain'))
                 part=MIMEBase('application','octet-stream'); part.set_payload(docx_buf2.read())
                 encoders.encode_base64(part)
                 part.add_header('Content-Disposition',f'attachment; filename="{fn}"')
@@ -749,10 +742,10 @@ if st.session_state.get("report_text"):
                 with smtplib.SMTP_SSL('smtp.gmail.com',465) as server:
                     server.login(GMAIL_USER,GMAIL_PASS)
                     server.sendmail(GMAIL_USER,RECIPIENT_EMAIL,msg.as_string())
-                st.success(f"✅ Sent to {RECIPIENT_EMAIL}")
+                st.success(f"✅ تم الإرسال إلى {RECIPIENT_EMAIL}")
             except Exception as e:
-                st.error(f"Email error: {str(e)}")
+                st.error(f"خطأ في الإرسال: {str(e)}")
     with col3:
-        if st.button("↺ New Patient / مريض جديد"):
+        if st.button("↺ مريض جديد"):
             for key in list(st.session_state.keys()): del st.session_state[key]
             st.rerun()
