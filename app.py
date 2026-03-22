@@ -524,11 +524,12 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 
 قواعد صارمة لا تحيد عنها:
 ١. اكتب التقرير كاملاً باللغة العربية فقط
-٢. حوّل كل إجابة "نعم/لا" إلى جملة سردية كاملة مفصّلة (مثال: بدلاً من "التشنجات: نعم" اكتب "يُشار إلى وجود تشنجات في التاريخ المرضي السابق")
-٣. النصوص المكتوبة في الشكاوى وHPI تُنقل حرفياً كما كُتبت
-٤. لا تخترع أي معلومة غير موجودة في البيانات
-٥. إذا كان الحقل "لم يُذكر" فاذكره باختصار دون التوسع
+٢. اكتب فقط ما هو مذكور في البيانات — إذا كان الحقل "لم يُذكر" فلا تكتب عنه شيئاً على الإطلاق ولا تذكره
+٣. حوّل كل إجابة "نعم/لا" إلى جملة سردية كاملة مفصّلة (مثال: بدلاً من "التشنجات: نعم" اكتب "يُشار إلى وجود تشنجات في التاريخ المرضي السابق")
+٤. النصوص المكتوبة في الشكاوى وHPI تُنقل حرفياً كما كُتبت دون تعديل
+٥. لا تخترع أي معلومة غير موجودة في البيانات ولا تُضف أي جملة افتراضية
 ٦. اجعل التقرير سردياً تفصيلياً وليس قائمة أسئلة وإجابات
+٧. لا تكتب أي قسم إذا كانت جميع بياناته "لم يُذكر"
 
 ══════════════════════════════════════════════
 ملخص سريع
@@ -579,11 +580,9 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 ══════════════════════════════════════════════
 القسم السادس: الملخص والانطباع السريري
 ══════════════════════════════════════════════
-اكتب قسمين:
+اكتب **الملخص السريري فقط**: فقرة سردية متكاملة تجمع أبرز ما ورد في التاريخ المرضي بأسلوب طبي احترافي — بدون انطباع سريري أو تشخيص.
 
-**الملخص السريري:** فقرة سردية متكاملة تجمع أبرز ما ورد في التاريخ المرضي بأسلوب طبي احترافي.
 
-**الانطباع السريري:** فقرة تُبرز النقاط الجوهرية التي تستحق الانتباه من المنظور النفسي والعصبي — دون وضع تشخيص نهائي.
 
 ══════════════════════════════════════════════
 بيانات التاريخ المرضي:
@@ -629,6 +628,14 @@ if st.session_state.get("report_text"):
             section.different_first_page_header_footer=True
             for hdr in [section.header, section.first_page_header]:
                 for p in hdr.paragraphs: p.clear()
+        # Set document default RTL
+        try:
+            settings = doc.settings.element
+            rsid = OxmlElement('w:themeFontLang')
+            rsid.set(qn('w:bidi'), 'ar-EG')
+            settings.append(rsid)
+        except: pass
+
         for section in doc.sections:
             sectPr=section._sectPr; pgB=OxmlElement('w:pgBorders')
             pgB.set(qn('w:offsetFrom'),'page')
@@ -658,10 +665,21 @@ if st.session_state.get("report_text"):
         bot.set(qn('w:sz'),'8'); bot.set(qn('w:space'),'4'); bot.set(qn('w:color'),'1A5CB8')
         pBdr.append(bot); pPr.append(pBdr)
         doc.add_paragraph()
-        p_i=doc.add_paragraph()
-        for label,val in [("المريض: ",pn),("   |   النوع: ",rs),("   |   الأخصائي: ",rb_)]:
-            r=p_i.add_run(label); r.bold=True; r.font.size=Pt(11); r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
-            r2=p_i.add_run(val); r2.font.size=Pt(11); r2.font.name="Arial"
+
+        # ── Info box: patient separate from psychologist ──
+        def info_line(label, val):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(2)
+            p.paragraph_format.space_after = Pt(2)
+            pPr_il = p._p.get_or_add_pPr()
+            jc = OxmlElement("w:jc"); jc.set(qn("w:val"), "right"); pPr_il.append(jc)
+            r1 = p.add_run(val + "  "); r1.font.size=Pt(11); r1.font.name="Arial"
+            r2 = p.add_run(label); r2.bold=True; r2.font.size=Pt(11); r2.font.name="Arial"; r2.font.color.rgb=CLINIC_BLUE
+            return p
+
+        info_line("المريض:", pn)
+        info_line("نوع الاستمارة:", rs)
+        info_line("اسم الأخصائي:", rb_)
         doc.add_paragraph()
         in_table=False; table=None
         for line in rt.split('\n'):
@@ -672,14 +690,49 @@ if st.session_state.get("report_text"):
             if ls.startswith('|') and ls.endswith('|'):
                 cells=[c.strip() for c in ls.strip('|').split('|')]
                 if all(set(c)<=set('-: ') for c in cells): continue
+                is_header_row = not in_table
                 if not in_table:
-                    in_table=True; table=doc.add_table(rows=0,cols=len(cells)); table.style='Table Grid'
+                    in_table=True
+                    table=doc.add_table(rows=0,cols=len(cells))
+                    table.style='Table Grid'
+                    # set column widths evenly
+                    from docx.shared import Inches as _In
+                    try:
+                        tbl_w = 9026  # A4 content width in DXA
+                        col_w = tbl_w // max(len(cells),1)
+                        from docx.oxml import OxmlElement as OE2
+                        tblPr = table._tbl.tblPr
+                        tblW = OE2('w:tblW')
+                        tblW.set(qn('w:w'), str(tbl_w))
+                        tblW.set(qn('w:type'), 'dxa')
+                        tblPr.append(tblW)
+                    except: pass
                 row=table.add_row()
                 for i,ct in enumerate(cells[:len(cells)]):
-                    if i < len(row.cells):
-                        cell=row.cells[i]; cell.text=ct
-                        for para in cell.paragraphs:
-                            for run in para.runs: run.font.size=Pt(10); run.font.name="Arial"
+                    if i >= len(row.cells): continue
+                    cell=row.cells[i]
+                    cell.text=""
+                    para=cell.paragraphs[0]
+                    # RTL cell
+                    pPr_c=para._p.get_or_add_pPr()
+                    jc_c=OxmlElement("w:jc"); jc_c.set(qn("w:val"),"right"); pPr_c.append(jc_c)
+                    bidi_c=OxmlElement("w:bidi"); pPr_c.append(bidi_c)
+                    run=para.add_run(ct)
+                    run.font.size=Pt(10); run.font.name="Arial"
+                    if is_header_row:
+                        run.font.bold=True
+                        run.font.color.rgb=RGBColor(0xFF,0xFF,0xFF)
+                        # blue background for header
+                        tc=cell._tc
+                        tcPr=tc.get_or_add_tcPr()
+                        shd=OxmlElement('w:shd')
+                        shd.set(qn('w:val'),'clear')
+                        shd.set(qn('w:color'),'auto')
+                        shd.set(qn('w:fill'),'1A5CB8')
+                        tcPr.append(shd)
+                    else:
+                        # alternating light blue for even rows
+                        pass
                 continue
             else: in_table=False; table=None
             if ls.startswith('══'):
@@ -691,19 +744,32 @@ if st.session_state.get("report_text"):
                 p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(14)
                 r=p.add_run(ls.strip('#* ')); r.bold=True; r.font.size=Pt(13)
                 r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
-                pPr3=p._p.get_or_add_pPr(); pBdr3=OxmlElement('w:pBdr')
+                pPr3=p._p.get_or_add_pPr()
+                bidi3=OxmlElement("w:bidi"); pPr3.append(bidi3)
+                jc3=OxmlElement("w:jc"); jc3.set(qn("w:val"),"right"); pPr3.append(jc3)
+                pBdr3=OxmlElement('w:pBdr')
                 b3=OxmlElement('w:bottom'); b3.set(qn('w:val'),'single')
                 b3.set(qn('w:sz'),'4'); b3.set(qn('w:space'),'1'); b3.set(qn('w:color'),'1A5CB8')
                 pBdr3.append(b3); pPr3.append(pBdr3); continue
             if ls.startswith('**') and ls.endswith('**'):
                 p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(8)
+                pPr_bld=p._p.get_or_add_pPr()
+                bidi_bld=OxmlElement("w:bidi"); pPr_bld.append(bidi_bld)
+                jc_bld=OxmlElement("w:jc"); jc_bld.set(qn("w:val"),"right"); pPr_bld.append(jc_bld)
                 r=p.add_run(ls.strip('*')); r.bold=True; r.font.size=Pt(11); r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
                 continue
             if ls.startswith('• ') or ls.startswith('- '):
                 p=doc.add_paragraph(style='List Bullet')
+                pPr_bl=p._p.get_or_add_pPr()
+                bidi_bl=OxmlElement("w:bidi"); pPr_bl.append(bidi_bl)
+                jc_bl=OxmlElement("w:jc"); jc_bl.set(qn("w:val"),"right"); pPr_bl.append(jc_bl)
                 r=p.add_run(ls.lstrip('•- ').strip()); r.font.size=Pt(11); r.font.name="Arial"
                 continue
-            p=doc.add_paragraph(); r=p.add_run(ls); r.font.size=Pt(11); r.font.name="Arial"
+            p=doc.add_paragraph()
+            pPr_rt=p._p.get_or_add_pPr()
+            bidi=OxmlElement("w:bidi"); pPr_rt.append(bidi)
+            jc_rt=OxmlElement("w:jc"); jc_rt.set(qn("w:val"),"right"); pPr_rt.append(jc_rt)
+            r=p.add_run(ls); r.font.size=Pt(11); r.font.name="Arial"
         doc.add_paragraph(); doc.add_paragraph()
         p_sep=doc.add_paragraph(); pPr_s=p_sep._p.get_or_add_pPr(); pBdr_s=OxmlElement('w:pBdr')
         top_s=OxmlElement('w:top'); top_s.set(qn('w:val'),'single')
