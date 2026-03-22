@@ -28,6 +28,8 @@ st.markdown("""
 
 # ── CONSTANTS ──
 RECIPIENT_EMAIL = "yusuf.a.abdelatti@gmail.com"
+GMAIL_USER = "yusuf.a.abdelatti@gmail.com"
+GMAIL_PASS = "erjl ehlj wpyg mfgx"
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "logo.png")
 CLINIC_BLUE = RGBColor(0x1A, 0x5C, 0xB8)
 NAVY = RGBColor(0x1B, 0x2A, 0x4A)
@@ -46,10 +48,6 @@ with st.sidebar:
     st.header("⚙️ Settings")
     groq_key = st.text_input("Groq API Key", type="password", placeholder="gsk_...")
     st.caption("Get free key at [console.groq.com](https://console.groq.com)")
-    st.divider()
-    gmail_user = st.text_input("Gmail Address (sender)", placeholder="yourname@gmail.com")
-    gmail_pass = st.text_input("Gmail App Password", type="password", placeholder="xxxx xxxx xxxx xxxx")
-    st.caption("Use Gmail App Password — [how to get one](https://support.google.com/accounts/answer/185833)")
     st.divider()
     history_by = st.text_input("Psychologist Name / اسم الأخصائي", value=st.session_state.get("history_by", ""))
 
@@ -964,13 +962,13 @@ if st.session_state.get("report_text"):
                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     with col2:
         if st.button("📧 Send to Email"):
-            if not gmail_user or not gmail_pass:
+            if not GMAIL_USER or not GMAIL_PASS:
                 st.error("Enter Gmail credentials in the sidebar first.")
             else:
                 try:
                     docx_buf2 = build_docx(report_text, patient_name, sheet_type, history_by, LOGO_PATH, DOCTOR)
                     msg = MIMEMultipart()
-                    msg['From'] = gmail_user; msg['To'] = RECIPIENT_EMAIL
+                    msg['From'] = GMAIL_USER; msg['To'] = RECIPIENT_EMAIL
                     msg['Subject'] = f"History Report — {patient_name}"
                     msg.attach(MIMEText(
                         f"Please find attached the history report for {patient_name}.\n\nHistory by: {history_by or '—'}\nSheet type: {sheet_type.capitalize()}",
@@ -981,8 +979,8 @@ if st.session_state.get("report_text"):
                     part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
                     msg.attach(part)
                     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-                        server.login(gmail_user, gmail_pass)
-                        server.sendmail(gmail_user, RECIPIENT_EMAIL, msg.as_string())
+                        server.login(GMAIL_USER, GMAIL_PASS)
+                        server.sendmail(GMAIL_USER, RECIPIENT_EMAIL, msg.as_string())
                     st.success(f"✅ Report sent to {RECIPIENT_EMAIL}")
                 except Exception as e:
                     st.error(f"Email error: {str(e)}")
