@@ -654,21 +654,16 @@ Do NOT create a "Contact and Administrative" sub-table — these fields are in t
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 2. PRESENTING CONCERNS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MUST be in structured table format — NOT narrative sentences.
-- Split into multiple smaller sub-tables (2–5 rows each).
-- Each sub-table covers one sub-category (e.g. Onset Details | Symptoms).
-- Format: Field | Value
-- Do NOT write paragraphs here.
-- Do NOT include Chief Complaint or HPI text here — those go in section 7.
-- SYMPTOMS RULE (STRICT):
-  The Symptoms field MUST appear as ONE row only inside the Presenting Concerns table.
-  Structure exactly:
-    Row 1: Field | Value   (header row)
-    Row 2: Symptoms | [all symptoms listed, each on a new line separated by \n]
-  Do NOT create a separate row per symptom.
-  Do NOT place symptoms outside the table.
-  Do NOT repeat the word "Symptoms" for each item.
-  All symptoms go into the single Value cell of the Symptoms row.
+This section has TWO parts only:
+
+PART A — Onset Details:
+Present onset, mode of onset, and course as a table (Field | Value rows, 2-3 rows max).
+Sub-table title: Onset Details:
+
+PART B — Symptoms:
+Write ONLY the sub-table title: Symptoms:
+Then write each symptom on its own line below the title — do NOT put them in a table.
+Do NOT include Chief Complaint or HPI text here — those go in section 7.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {"3. FAMILY AND MARRIAGE BACKGROUND" if is_adult else "3. FAMILY BACKGROUND"}
@@ -819,6 +814,7 @@ if st.session_state.get("report_text"):
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(16)
             p.paragraph_format.space_after  = Pt(4)
+            p.paragraph_format.keep_with_next = True  # stay with first content below
             r = p.add_run(text.strip('# '))
             r.font.size = Pt(13); r.font.name = "Arial"
             r.font.bold = True; r.font.color.rgb = CLINIC_BLUE
@@ -833,12 +829,18 @@ if st.session_state.get("report_text"):
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(10)
             p.paragraph_format.space_after  = Pt(3)
+            p.paragraph_format.keep_with_next = True  # stay with table below
             r = p.add_run(text.rstrip(':'))
             r.font.size = Pt(11); r.font.name = "Arial"
             r.font.bold = True; r.font.color.rgb = RGBColor(0x1B,0x2A,0x4A)
 
         def add_table_row(table, field, value, is_header_row=False):
             row = table.add_row()
+            # Prevent row from splitting across pages
+            trPr = row._tr.get_or_add_trPr()
+            cantSplit = OxmlElement('w:cantSplit')
+            cantSplit.set(qn('w:val'), '1')
+            trPr.append(cantSplit)
             # Field cell
             fc = row.cells[0]; fc.text = ""
             fp = fc.paragraphs[0]
@@ -897,6 +899,10 @@ if st.session_state.get("report_text"):
                     gc = OxmlElement('w:gridCol'); gc.set(qn('w:w'), str(w))
                     cols_el.append(gc)
                 t._tbl.insert(0, cols_el)
+                # Keep table together on one page if it fits
+                tblLook = OxmlElement('w:tblLook')
+                tblLook.set(qn('w:val'), '04A0')
+                tblPr.append(tblLook)
             except: pass
             return t
 
@@ -904,6 +910,7 @@ if st.session_state.get("report_text"):
         in_table = False
         current_table = None
         in_dev_history = False
+        in_symptoms_box = False
         lines = rt.split('\n')
         i = 0
         while i < len(lines):
@@ -911,6 +918,7 @@ if st.session_state.get("report_text"):
             i += 1
             if not ls:
                 if in_table: in_table = False; current_table = None
+                in_symptoms_box = False
                 doc.add_paragraph().paragraph_format.space_after = Pt(2)
                 continue
 
@@ -921,6 +929,7 @@ if st.session_state.get("report_text"):
                 ls in ('CLINICAL SUMMARY', 'REPORT HEADER')):
                 in_table = False; current_table = None
                 in_dev_history = 'DEVELOPMENTAL' in ls.upper()
+                in_symptoms_box = False
                 add_section_title(ls)
                 continue
 
@@ -929,11 +938,16 @@ if st.session_state.get("report_text"):
                 in_table = False; current_table = None
                 doc.add_paragraph().paragraph_format.space_after = Pt(2)
                 add_subtable_title(ls)
-                current_table = make_table()
-                # Only add header row if NOT in developmental history section
-                if not in_dev_history:
-                    add_table_row(current_table, "Field", "Value", is_header_row=True)
-                in_table = True
+                # Symptoms section: no table — just collect lines as styled text box
+                if ls.lower().startswith('symptom'):
+                    in_symptoms_box = True
+                    in_table = False; current_table = None
+                else:
+                    in_symptoms_box = False
+                    current_table = make_table()
+                    if not in_dev_history:
+                        add_table_row(current_table, "Field", "Value", is_header_row=True)
+                    in_table = True
                 continue
 
             # Table row: contains pipe separator
@@ -985,7 +999,16 @@ if st.session_state.get("report_text"):
                              color=RGBColor(0x1B,0x2A,0x4A), space_before=10)
                 continue
 
-            # Normal line — check if Arabic (RTL) or English (LTR)
+            # Normal line — check if symptoms box, Arabic (RTL) or English (LTR)
+            if in_symptoms_box:
+                # Render each symptom as an indented line inside a light box feel
+                p = doc.add_paragraph()
+                p.paragraph_format.space_before = Pt(0)
+                p.paragraph_format.space_after  = Pt(3)
+                p.paragraph_format.left_indent  = Inches(0.2)
+                r = p.add_run(f"• {ls.lstrip('•- ').strip()}")
+                r.font.size=Pt(11); r.font.name="Arial"
+                continue
             in_table = False; current_table = None
             is_arabic = any('\u0600' <= c <= '\u06ff' for c in ls)
             p = doc.add_paragraph()
@@ -993,7 +1016,6 @@ if st.session_state.get("report_text"):
             p.paragraph_format.space_after  = Pt(4)
             if is_arabic:
                 pPr = p._p.get_or_add_pPr()
-                OxmlElement("w:bidi")
                 bidi = OxmlElement("w:bidi"); pPr.append(bidi)
                 jc   = OxmlElement("w:jc"); jc.set(qn("w:val"),"right"); pPr.append(jc)
             r = p.add_run(ls); r.font.size=Pt(11); r.font.name="Arial"
