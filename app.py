@@ -251,9 +251,19 @@ if is_adult:
     d["past_hx"] = ta("تفاصيل التاريخ السابق","Details","a_past",80)
 
     sec("التاريخ العائلي", "Family History")
-    c1,c2 = st.columns(2)
-    with c1: d["fam_psych"]  = rb("مرض نفسي في الأسرة؟","Psychiatric in family?", نعم_لا_لاينطبق, "a_fpsych")
-    with c2: d["fam_neuro"]  = rb("مرض عصبي في الأسرة؟","Neurological in family?", نعم_لا_لاينطبق, "a_fneuro")
+    c1, c2 = st.columns(2)
+    with c1:
+        d["fam_psych"]  = rb("مرض نفسي في الأسرة؟","Psychiatric in family?", نعم_لا_لاينطبق, "a_fpsych")
+        if st.session_state.get("a_fpsych") == "نعم":
+            d["fam_psych_details"] = ti("ما هو المرض النفسي؟ (من في الأسرة)","Specify psychiatric illness","a_fpsych_det")
+        else:
+            d["fam_psych_details"] = ""
+    with c2:
+        d["fam_neuro"]  = rb("مرض عصبي في الأسرة؟","Neurological in family?", نعم_لا_لاينطبق, "a_fneuro")
+        if st.session_state.get("a_fneuro") == "نعم":
+            d["fam_neuro_details"] = ti("ما هو المرض العصبي؟ (من في الأسرة)","Specify neurological illness","a_fneuro_det")
+        else:
+            d["fam_neuro_details"] = ""
     d["family_hx"] = ta("تفاصيل التاريخ العائلي","Details","a_famhx",80)
 
     sec("الفحوصات", "Investigations")
@@ -393,6 +403,12 @@ else:
     with c1:
         d["high_fever"]   = rb("حرارة ≥40 درجة؟","High fever?", نعم_لا_لاينطبق, "c_hfever")
         d["head_trauma"]  = rb("ارتطام رأس؟","Head trauma?", نعم_لا_لاينطبق, "c_htrauma")
+        if st.session_state.get("c_htrauma") == "نعم":
+            d["head_trauma_location"] = ti("مكان الارتطام في الرأس","Location on head","c_htrauma_loc")
+            d["head_trauma_details"]  = ti("كيف حدث الارتطام؟","How did it happen?","c_htrauma_det")
+        else:
+            d["head_trauma_location"] = ""
+            d["head_trauma_details"]  = ""
     with c2:
         d["convulsions"]  = rb("تشنجات؟","Convulsions?", نعم_لا_لاينطبق, "c_conv")
         d["post_vaccine"] = rb("مضاعفات بعد التطعيم؟","Post-vaccine comp.?", نعم_لا_لاينطبق, "c_pvacc")
@@ -405,10 +421,26 @@ else:
     c1, c2 = st.columns(2)
     with c1:
         d["fam_psych"]   = rb("مرض نفسي في الأسرة؟","Psychiatric in family?", نعم_لا_لاينطبق, "c_fpsych")
+        if st.session_state.get("c_fpsych") == "نعم":
+            d["fam_psych_details"] = ti("ما هو المرض النفسي؟ (من في الأسرة)","Specify psychiatric illness","c_fpsych_det")
+        else:
+            d["fam_psych_details"] = ""
         d["fam_neuro"]   = rb("مرض عصبي في الأسرة؟","Neurological in family?", نعم_لا_لاينطبق, "c_fneuro")
+        if st.session_state.get("c_fneuro") == "نعم":
+            d["fam_neuro_details"] = ti("ما هو المرض العصبي؟ (من في الأسرة)","Specify neurological illness","c_fneuro_det")
+        else:
+            d["fam_neuro_details"] = ""
     with c2:
         d["fam_mr"]      = rb("إعاقة ذهنية في الأسرة؟","MR in family?", نعم_لا_لاينطبق, "c_fmr")
+        if st.session_state.get("c_fmr") == "نعم":
+            d["fam_mr_details"] = ti("من في الأسرة؟ وما درجة الإعاقة؟","Specify MR details","c_fmr_det")
+        else:
+            d["fam_mr_details"] = ""
         d["fam_epilepsy"]= rb("صرع في الأسرة؟","Epilepsy in family?", نعم_لا_لاينطبق, "c_fepil")
+        if st.session_state.get("c_fepil") == "نعم":
+            d["fam_epilepsy_details"] = ti("من في الأسرة؟ وهل يتعالج؟","Specify epilepsy details","c_fepil_det")
+        else:
+            d["fam_epilepsy_details"] = ""
     d["family_hx"] = ta("تفاصيل التاريخ العائلي","Details","c_famhx",80)
 
     sec("الفحوصات", "Investigations")
@@ -491,7 +523,7 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 التاريخ السابق: مرض نفسي سابق: {sv(d,'prev_psych')} | دخول مستشفى: {sv(d,'prev_hosp')}
 {sv(d,'past_hx')}
 
-التاريخ العائلي: مرض نفسي: {sv(d,'fam_psych')} | مرض عصبي: {sv(d,'fam_neuro')}
+التاريخ العائلي: مرض نفسي: {sv(d,'fam_psych')}{(' — ' + sv(d,'fam_psych_details')) if d.get('fam_psych_details') else ''} | مرض عصبي: {sv(d,'fam_neuro')}{(' — ' + sv(d,'fam_neuro_details')) if d.get('fam_neuro_details') else ''}
 {sv(d,'family_hx')}
 
 الفحوصات: أُجريت فحوصات: {sv(d,'had_inv')}
@@ -539,11 +571,11 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 تاريخ المرض الحالي:
 {sv(d,'hpi')}
 
-التاريخ السابق: حرارة ≥40: {sv(d,'high_fever')} | ارتطام رأس: {sv(d,'head_trauma')} | تشنجات: {sv(d,'convulsions')}
+التاريخ السابق: حرارة ≥40: {sv(d,'high_fever')} | ارتطام رأس: {sv(d,'head_trauma')}{(' — المكان: ' + sv(d,'head_trauma_location') + ' — كيف: ' + sv(d,'head_trauma_details')) if sv(d,'head_trauma_location') != 'لم يُذكر' or sv(d,'head_trauma_details') != 'لم يُذكر' else ''} | تشنجات: {sv(d,'convulsions')}
 مضاعفات بعد التطعيم: {sv(d,'post_vaccine')} | دخول مستشفى: {sv(d,'prev_hosp')} | جلسات سابقة: {sv(d,'prev_therapy')}
 {sv(d,'past_hx')}
 
-التاريخ العائلي: مرض نفسي: {sv(d,'fam_psych')} | عصبي: {sv(d,'fam_neuro')} | إعاقة ذهنية: {sv(d,'fam_mr')} | صرع: {sv(d,'fam_epilepsy')}
+التاريخ العائلي: مرض نفسي: {sv(d,'fam_psych')}{(' — ' + sv(d,'fam_psych_details')) if d.get('fam_psych_details') else ''} | عصبي: {sv(d,'fam_neuro')}{(' — ' + sv(d,'fam_neuro_details')) if d.get('fam_neuro_details') else ''} | إعاقة ذهنية: {sv(d,'fam_mr')}{(' — ' + sv(d,'fam_mr_details')) if d.get('fam_mr_details') else ''} | صرع: {sv(d,'fam_epilepsy')}{(' — ' + sv(d,'fam_epilepsy_details')) if d.get('fam_epilepsy_details') else ''}
 {sv(d,'family_hx')}
 
 الفحوصات: CT: {sv(d,'had_ct')} | MRI: {sv(d,'had_mri')} | EEG: {sv(d,'had_eeg')} | SB5: {sv(d,'had_iq')} | CARS: {sv(d,'had_cars')} — الدرجة: {sv(d,'cars_score')}
