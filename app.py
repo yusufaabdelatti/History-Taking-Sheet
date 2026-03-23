@@ -555,8 +555,8 @@ Convert all MCQ answers into natural English sentences.
 Any siblings data, referral info, or other structured fields not covered above.
 
 7. ORIGINAL ARABIC RESPONSES
-Place ALL long Arabic text fields here verbatim — exactly as written, zero modification:
-{verbatim_block if verbatim_block else "(No long text responses provided)"}
+Place ALL long Arabic text fields here verbatim in the output — exactly as written, zero modification.
+Use the arabic verbatim data provided at the end of this prompt under "ARABIC VERBATIM SECTION".
 
 ══════════════════════════════════════════════
 DATA:
@@ -566,7 +566,10 @@ DATA:
 بيانات التاريخ المرضي:
 {data_block}
 ══════════════════════════════════════════════
-الأخصائي: {history_by or 'لم يُذكر'} | نوع الاستمارة: {"بالغ" if is_adult else "طفل"}
+ARABIC VERBATIM SECTION (place these under section 7, verbatim, no modification):
+{verbatim_block if verbatim_block else "(No long text responses provided)"}
+══════════════════════════════════════════════
+History by: {history_by or 'Not reported'} | Sheet: {"Adult" if is_adult else "Child"}
 """
 
         with st.spinner("جاري إنشاء التقرير..."):
