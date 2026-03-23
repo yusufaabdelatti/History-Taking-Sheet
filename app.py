@@ -563,15 +563,48 @@ CONTENT RULES:
 10. "No" / "لا" answers — do not mention them at all.
 11. FORBIDDEN: No diagnosis, no clinical judgment, no recommendations, no assumptions, no summarization of Arabic text.
 
+FORMATTING RULES FOR OUTPUT:
+12. Do NOT use any markdown symbols for bold (no **, no __, no ##, no #).
+    Use ONLY plain text. Bold rendering will be handled by the document builder.
+13. For section titles: write them in ALL CAPS on their own line, preceded by the section number.
+    Example: "1. PATIENT INFORMATION" — no symbols before or after.
+14. For sub-table titles: write them in Title Case on their own line, followed by a colon.
+    Example: "Personal Details:" or "Father Information:"
+15. For table rows: use pipe format exactly like this:
+    Field | Value
+    Do NOT bold inside the pipe row. The builder will bold the field.
+16. For line-by-line sections: write one statement per line, no bullet symbols.
+17. The Specialist Name must appear ONLY in the header section at the top, nowhere else.
+18. No hashtags, no asterisks, no markdown of any kind anywhere in the output.
+
 Structure the report using these sections. Include ONLY data that was provided.
+
+REPORT HEADER (top of report, before all sections):
+Write these fields in a clean aligned format — labels in English:
+Patient Name | [value]
+Form Type | [value]
+Specialist Name | [value]
+Date | [value]
+Phone Number | [value]
+Add a clear visual separator line after this header.
+The Specialist Name must NOT appear anywhere else in the report.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. PATIENT INFORMATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Present as a clean two-column markdown table (Field | Value).
-- Bold the Field column. Normal text for Value column.
-- Include only provided fields. Skip any not reported.
-- Split into sub-tables of 2–5 rows each (e.g. Personal | Contact | Administrative).
+Split into exactly THREE separate sub-tables, each with its own title and 2–5 rows:
+
+Sub-table 1 title: Personal Details
+Fields: Name, Age, Gender, {"Social Status, Education, Occupation" if is_adult else "Birth Order, Lives With, School, Grade, Academic Performance"}
+
+Sub-table 2 title: {"Lifestyle & Background" if is_adult else "Daily Routine & Screen Time"}
+Fields: {"Smoking, Hobbies, Referral Source, History Type" if is_adult else "Screen Time, Referral Source, History Type"}
+
+Sub-table 3 title: Contact & Administrative
+Fields: Phone, Date, {"any remaining fields" if is_adult else "any remaining fields"}
+
+Each sub-table format — Field | Value (do not bold inside the row, builder handles it).
+Skip any fields not reported.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 2. PRESENTING CONCERNS
@@ -730,95 +763,158 @@ if st.session_state.get("report_text"):
         info_line("نوع الاستمارة:", rs)
         info_line("اسم الأخصائي:", rb_)
         doc.add_paragraph()
-        in_table=False; table=None
-        for line in rt.split('\n'):
-            ls=line.strip()
+        def add_rtl_para(text, bold=False, size=11, color=None, space_before=0, space_after=4, underline=False):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(space_before)
+            p.paragraph_format.space_after  = Pt(space_after)
+            pPr = p._p.get_or_add_pPr()
+            bidi = OxmlElement("w:bidi"); pPr.append(bidi)
+            jc   = OxmlElement("w:jc");   jc.set(qn("w:val"),"right"); pPr.append(jc)
+            r = p.add_run(text)
+            r.font.size = Pt(size); r.font.name = "Arial"; r.bold = bold
+            if color: r.font.color.rgb = color
+            if underline: r.font.underline = True
+            return p
+
+        def add_section_title(text):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(16)
+            p.paragraph_format.space_after  = Pt(4)
+            r = p.add_run(text.strip('# '))
+            r.font.size = Pt(13); r.font.name = "Arial"
+            r.font.bold = True; r.font.color.rgb = CLINIC_BLUE
+            pPr = p._p.get_or_add_pPr()
+            pBdr = OxmlElement('w:pBdr')
+            bot  = OxmlElement('w:bottom')
+            bot.set(qn('w:val'),'single'); bot.set(qn('w:sz'),'6')
+            bot.set(qn('w:space'),'2');    bot.set(qn('w:color'),'1A5CB8')
+            pBdr.append(bot); pPr.append(pBdr)
+
+        def add_subtable_title(text):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(10)
+            p.paragraph_format.space_after  = Pt(3)
+            r = p.add_run(text.rstrip(':'))
+            r.font.size = Pt(11); r.font.name = "Arial"
+            r.font.bold = True; r.font.color.rgb = RGBColor(0x1B,0x2A,0x4A)
+
+        def add_table_row(table, field, value, is_first_row=False):
+            row = table.add_row()
+            # Field cell — light blue bg, bold
+            fc = row.cells[0]; fc.text = ""
+            fp = fc.paragraphs[0]
+            fr = fp.add_run(field); fr.font.size=Pt(10); fr.font.name="Arial"; fr.font.bold=True
+            tc1 = fc._tc; tcPr1 = tc1.get_or_add_tcPr()
+            shd1 = OxmlElement('w:shd')
+            shd1.set(qn('w:val'),'clear'); shd1.set(qn('w:color'),'auto')
+            shd1.set(qn('w:fill'),'E8F0FE')
+            tcPr1.append(shd1)
+            margins1 = OxmlElement('w:tcMar')
+            for side in ['top','bottom','left','right']:
+                m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'80'); m.set(qn('w:type'),'dxa')
+                margins1.append(m)
+            tcPr1.append(margins1)
+            # Value cell — white bg, normal
+            vc = row.cells[1]; vc.text = ""
+            vp = vc.paragraphs[0]
+            vr = vp.add_run(value); vr.font.size=Pt(10); vr.font.name="Arial"; vr.font.bold=False
+            tc2 = vc._tc; tcPr2 = tc2.get_or_add_tcPr()
+            margins2 = OxmlElement('w:tcMar')
+            for side in ['top','bottom','left','right']:
+                m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'80'); m.set(qn('w:type'),'dxa')
+                margins2.append(m)
+            tcPr2.append(margins2)
+
+        def make_table():
+            t = doc.add_table(rows=0, cols=2)
+            t.style = 'Table Grid'
+            try:
+                tblPr = t._tbl.tblPr
+                tblW  = OxmlElement('w:tblW')
+                tblW.set(qn('w:w'),'9026'); tblW.set(qn('w:type'),'dxa')
+                tblPr.append(tblW)
+                cols_el = OxmlElement('w:tblGrid')
+                for w in [3000, 6026]:
+                    gc = OxmlElement('w:gridCol'); gc.set(qn('w:w'), str(w))
+                    cols_el.append(gc)
+                t._tbl.insert(0, cols_el)
+            except: pass
+            return t
+
+        # ── Parse and render the report ──
+        in_table = False
+        current_table = None
+        lines = rt.split('\n')
+        i = 0
+        while i < len(lines):
+            ls = lines[i].strip()
+            i += 1
             if not ls:
-                if not in_table: doc.add_paragraph()
+                if in_table: in_table = False; current_table = None
+                doc.add_paragraph().paragraph_format.space_after = Pt(2)
                 continue
-            if ls.startswith('|') and ls.endswith('|'):
-                cells=[c.strip() for c in ls.strip('|').split('|')]
-                if all(set(c)<=set('-: ') for c in cells): continue
-                is_header_row = not in_table
-                if not in_table:
-                    in_table=True
-                    table=doc.add_table(rows=0,cols=len(cells))
-                    table.style='Table Grid'
-                    # set column widths evenly
-                    from docx.shared import Inches as _In
-                    try:
-                        tbl_w = 9026  # A4 content width in DXA
-                        col_w = tbl_w // max(len(cells),1)
-                        from docx.oxml import OxmlElement as OE2
-                        tblPr = table._tbl.tblPr
-                        tblW = OE2('w:tblW')
-                        tblW.set(qn('w:w'), str(tbl_w))
-                        tblW.set(qn('w:type'), 'dxa')
-                        tblPr.append(tblW)
-                    except: pass
-                row=table.add_row()
-                for i,ct in enumerate(cells[:len(cells)]):
-                    if i >= len(row.cells): continue
-                    cell=row.cells[i]
-                    cell.text=""
-                    para=cell.paragraphs[0]
-                    # RTL cell
-                    pPr_c=para._p.get_or_add_pPr()
-                    jc_c=OxmlElement("w:jc"); jc_c.set(qn("w:val"),"right"); pPr_c.append(jc_c)
-                    bidi_c=OxmlElement("w:bidi"); pPr_c.append(bidi_c)
-                    run=para.add_run(ct)
-                    run.font.size=Pt(10); run.font.name="Arial"
-                    if is_header_row:
-                        run.font.bold=True
-                        run.font.color.rgb=RGBColor(0xFF,0xFF,0xFF)
-                        # blue background for header
-                        tc=cell._tc
-                        tcPr=tc.get_or_add_tcPr()
-                        shd=OxmlElement('w:shd')
-                        shd.set(qn('w:val'),'clear')
-                        shd.set(qn('w:color'),'auto')
-                        shd.set(qn('w:fill'),'1A5CB8')
-                        tcPr.append(shd)
-                    else:
-                        # alternating light blue for even rows
-                        pass
+
+            # Section title: starts with digit + dot + space + CAPS (e.g. "1. PATIENT INFORMATION")
+            import re
+            if re.match(r'^\d+\.\s+[A-Z\s]+$', ls) or re.match(r'^\d+\.\s+[A-Z][A-Z\s&]+$', ls):
+                in_table = False; current_table = None
+                add_section_title(ls)
                 continue
-            else: in_table=False; table=None
-            if ls.startswith('══'):
-                p=doc.add_paragraph(); pPr2=p._p.get_or_add_pPr(); pBdr2=OxmlElement('w:pBdr')
+
+            # Sub-table title: Title Case line ending with colon, no pipe
+            if ls.endswith(':') and '|' not in ls and len(ls) < 60 and ls[0].isupper():
+                in_table = False; current_table = None
+                doc.add_paragraph().paragraph_format.space_after = Pt(2)
+                add_subtable_title(ls)
+                current_table = make_table()
+                in_table = True
+                continue
+
+            # Table row: contains pipe separator
+            if '|' in ls:
+                parts = [p.strip() for p in ls.split('|') if p.strip()]
+                # Skip markdown separator rows
+                if all(set(p) <= set('-: ') for p in parts): continue
+                if not in_table or current_table is None:
+                    in_table = True
+                    current_table = make_table()
+                if len(parts) >= 2:
+                    field = parts[0].strip('* ')
+                    value = parts[1]
+                    add_table_row(current_table, field, value)
+                elif len(parts) == 1:
+                    add_table_row(current_table, parts[0].strip('* '), '')
+                continue
+
+            # Separator lines
+            if ls.startswith('━') or ls.startswith('══') or ls.startswith('---'):
+                in_table = False; current_table = None
+                p = doc.add_paragraph(); p.paragraph_format.space_before=Pt(4)
+                pPr2=p._p.get_or_add_pPr(); pBdr2=OxmlElement('w:pBdr')
                 b2=OxmlElement('w:bottom'); b2.set(qn('w:val'),'single')
-                b2.set(qn('w:sz'),'6'); b2.set(qn('w:space'),'1'); b2.set(qn('w:color'),'1A5CB8')
-                pBdr2.append(b2); pPr2.append(pBdr2); continue
-            if 'القسم' in ls or 'ملخص سريع' in ls:
-                p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(14)
-                r=p.add_run(ls.strip('#* ')); r.bold=True; r.font.size=Pt(13)
-                r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
-                pPr3=p._p.get_or_add_pPr()
-                bidi3=OxmlElement("w:bidi"); pPr3.append(bidi3)
-                jc3=OxmlElement("w:jc"); jc3.set(qn("w:val"),"right"); pPr3.append(jc3)
-                pBdr3=OxmlElement('w:pBdr')
-                b3=OxmlElement('w:bottom'); b3.set(qn('w:val'),'single')
-                b3.set(qn('w:sz'),'4'); b3.set(qn('w:space'),'1'); b3.set(qn('w:color'),'1A5CB8')
-                pBdr3.append(b3); pPr3.append(pBdr3); continue
-            if ls.startswith('**') and ls.endswith('**'):
-                p=doc.add_paragraph(); p.paragraph_format.space_before=Pt(8)
-                pPr_bld=p._p.get_or_add_pPr()
-                bidi_bld=OxmlElement("w:bidi"); pPr_bld.append(bidi_bld)
-                jc_bld=OxmlElement("w:jc"); jc_bld.set(qn("w:val"),"right"); pPr_bld.append(jc_bld)
-                r=p.add_run(ls.strip('*')); r.bold=True; r.font.size=Pt(11); r.font.name="Arial"; r.font.color.rgb=CLINIC_BLUE
+                b2.set(qn('w:sz'),'4'); b2.set(qn('w:space'),'1'); b2.set(qn('w:color'),'CCCCCC')
+                pBdr2.append(b2); pPr2.append(pBdr2)
                 continue
-            if ls.startswith('• ') or ls.startswith('- '):
-                p=doc.add_paragraph(style='List Bullet')
-                pPr_bl=p._p.get_or_add_pPr()
-                bidi_bl=OxmlElement("w:bidi"); pPr_bl.append(bidi_bl)
-                jc_bl=OxmlElement("w:jc"); jc_bl.set(qn("w:val"),"right"); pPr_bl.append(jc_bl)
-                r=p.add_run(ls.lstrip('•- ').strip()); r.font.size=Pt(11); r.font.name="Arial"
+
+            # Arabic verbatim heading (ends with colon, contains Arabic)
+            if ls.endswith(':') and any('\u0600' <= c <= '\u06ff' for c in ls):
+                in_table = False; current_table = None
+                add_rtl_para(ls.rstrip(':'), bold=True, size=11,
+                             color=RGBColor(0x1B,0x2A,0x4A), space_before=10)
                 continue
-            p=doc.add_paragraph()
-            pPr_rt=p._p.get_or_add_pPr()
-            bidi=OxmlElement("w:bidi"); pPr_rt.append(bidi)
-            jc_rt=OxmlElement("w:jc"); jc_rt.set(qn("w:val"),"right"); pPr_rt.append(jc_rt)
-            r=p.add_run(ls); r.font.size=Pt(11); r.font.name="Arial"
+
+            # Normal line — check if Arabic (RTL) or English (LTR)
+            in_table = False; current_table = None
+            is_arabic = any('\u0600' <= c <= '\u06ff' for c in ls)
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(1)
+            p.paragraph_format.space_after  = Pt(4)
+            if is_arabic:
+                pPr = p._p.get_or_add_pPr()
+                OxmlElement("w:bidi")
+                bidi = OxmlElement("w:bidi"); pPr.append(bidi)
+                jc   = OxmlElement("w:jc"); jc.set(qn("w:val"),"right"); pPr.append(jc)
+            r = p.add_run(ls); r.font.size=Pt(11); r.font.name="Arial"
         doc.add_paragraph(); doc.add_paragraph()
         p_sep=doc.add_paragraph(); pPr_s=p_sep._p.get_or_add_pPr(); pBdr_s=OxmlElement('w:pBdr')
         top_s=OxmlElement('w:top'); top_s.set(qn('w:val'),'single')
