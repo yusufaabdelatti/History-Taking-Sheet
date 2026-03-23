@@ -563,31 +563,74 @@ CONTENT RULES:
 10. "No" / "لا" answers — do not mention them at all.
 11. FORBIDDEN: No diagnosis, no clinical judgment, no recommendations, no assumptions, no summarization of Arabic text.
 
-Structure the report using these sections. Include ONLY data that was provided:
+Structure the report using these sections. Include ONLY data that was provided.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. PATIENT INFORMATION
-Present as a clean two-column table (Field | Value). Include only provided fields.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Present as a clean two-column markdown table (Field | Value).
+- Bold the Field column. Normal text for Value column.
+- Include only provided fields. Skip any not reported.
+- Split into sub-tables of 2–5 rows each (e.g. Personal | Contact | Administrative).
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 2. PRESENTING CONCERNS
-Convert onset, mode, and course into natural English sentences. Do NOT include Chief Complaint or HPI here — those go in section 7.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MUST be in structured table format — NOT narrative sentences.
+- Split into multiple smaller sub-tables (2–5 rows each).
+- Each sub-table covers one sub-category (e.g. Onset | Course | Referral).
+- Format: | **Field** | Value |
+- Bold Field. Normal Value. Do NOT write paragraphs here.
+- Do NOT include Chief Complaint or HPI text here — those go in section 7.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {"3. FAMILY AND MARRIAGE BACKGROUND" if is_adult else "3. FAMILY BACKGROUND"}
-Convert all MCQ answers into natural English sentences. Free text fields go to section 7.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MUST be in structured table format — NOT narrative sentences.
+- Split into multiple smaller sub-tables (2–5 rows each).
+- Sub-categories: Father | Mother | Parents Relationship | {"Marriage Details | " if is_adult else ""}Siblings.
+- Format: | **Field** | Value |
+- Bold Field. Normal Value. No paragraphs.
+- Free text fields go to section 7.
 
-{"" if is_adult else "4. DEVELOPMENTAL HISTORY"}
-{"" if is_adult else "Present as a clean two-column table (Milestone | Finding). Include only provided milestones."}
+{"" if is_adult else """━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. DEVELOPMENTAL HISTORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Present as a clean two-column table (Milestone | Finding).
+- Bold Milestone column. Normal Finding column.
+- Split into sub-tables: Pregnancy & Birth | Feeding & Growth | Language & Cognition.
+- Include only provided milestones. Skip not reported ones."""}
 
 {"4. MEDICAL HISTORY" if is_adult else "5. MEDICAL HISTORY"}
-Convert Yes/No answers into natural English sentences. Free text details go to section 7.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Write each finding on a SEPARATE LINE — do NOT combine into paragraphs.
+- One statement per line.
+- Convert Yes/No to natural English sentences, one per line.
+- Free text details go to section 7.
+Example format:
+The patient has a history of previous psychiatric treatment.
+No previous hospitalizations were reported.
 
 {"5. BEHAVIORAL AND CLINICAL OBSERVATIONS" if is_adult else "6. BEHAVIORAL AND CLINICAL OBSERVATIONS"}
-Convert all MCQ answers into natural English sentences.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Write each observation on a SEPARATE LINE — do NOT combine into paragraphs.
+- One statement per line.
+- Convert each MCQ answer to a natural English sentence.
+- Each line = one clear piece of information.
+Example format:
+Sleep is interrupted.
+Appetite is decreased.
+Punishment methods used include verbal and withdrawal of privileges.
 
 6. ADDITIONAL INFORMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Include siblings data and any other structured fields not covered above.
+One item per line.
 
 7. ORIGINAL ARABIC RESPONSES
-Copy each item below EXACTLY as written — zero modification, zero translation:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Copy each item below EXACTLY as written — zero modification, zero translation.
+Present each one under its heading with a clear separator:
 {verbatim_block}
 
 ══════════════════════════════════════════════
@@ -821,4 +864,3 @@ if st.session_state.get("report_text"):
         if st.button("↺ مريض جديد"):
             for key in list(st.session_state.keys()): del st.session_state[key]
             st.rerun()
-            
