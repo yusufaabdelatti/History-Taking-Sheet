@@ -660,10 +660,15 @@ MUST be in structured table format — NOT narrative sentences.
 - Format: Field | Value
 - Do NOT write paragraphs here.
 - Do NOT include Chief Complaint or HPI text here — those go in section 7.
-- SYMPTOMS RULE: ALL symptoms must be grouped into ONE single row.
-  Field: "Symptoms"
-  Value: list all symptoms each on a new line inside the same cell (use line breaks between them).
+- SYMPTOMS RULE (STRICT):
+  The Symptoms field MUST appear as ONE row only inside the Presenting Concerns table.
+  Structure exactly:
+    Row 1: Field | Value   (header row)
+    Row 2: Symptoms | [all symptoms listed, each on a new line separated by \n]
   Do NOT create a separate row per symptom.
+  Do NOT place symptoms outside the table.
+  Do NOT repeat the word "Symptoms" for each item.
+  All symptoms go into the single Value cell of the Symptoms row.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {"3. FAMILY AND MARRIAGE BACKGROUND" if is_adult else "3. FAMILY BACKGROUND"}
@@ -680,8 +685,8 @@ MUST be in structured table format — NOT narrative sentences.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Present as a clean two-column table.
 - Split into sub-tables: Pregnancy & Birth | Feeding & Growth | Language & Cognition.
-- Each sub-table MUST start with this header row: Milestone | Finding
-- Do NOT use Field | Value for developmental history tables — use Milestone | Finding instead.
+- Do NOT add any header row to developmental history tables.
+- Tables start directly with data rows (no Field|Value, no Milestone|Finding header).
 - Include only provided milestones. Skip not reported ones."""}
 
 {"4. MEDICAL HISTORY" if is_adult else "5. MEDICAL HISTORY"}
@@ -752,7 +757,7 @@ if st.session_state.get("report_text"):
     st.markdown("### ✅ تم إنشاء التقرير")
     st.text_area("", value=rt, height=600, label_visibility="collapsed")
 
-    def build_docx(rt, pn, rs, rb_, logo_path, doctor):
+    def build_docx(rt, pn, rs, rb_, logo_path):
         doc = Document()
         for section in doc.sections:
             section.top_margin=Cm(2.5); section.bottom_margin=Cm(2.5)
@@ -853,23 +858,31 @@ if st.session_state.get("report_text"):
                 m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'80'); m.set(qn('w:type'),'dxa')
                 margins1.append(m)
             tcPr1.append(margins1)
-            # Value cell
+            # Value cell — supports multi-line values (\n separated)
             vc = row.cells[1]; vc.text = ""
-            vp = vc.paragraphs[0]
-            vr = vp.add_run(value); vr.font.size=Pt(10); vr.font.name="Arial"; vr.font.bold=False
             tc2 = vc._tc; tcPr2 = tc2.get_or_add_tcPr()
             if is_header_row:
                 shd2 = OxmlElement('w:shd')
                 shd2.set(qn('w:val'),'clear'); shd2.set(qn('w:color'),'auto')
                 shd2.set(qn('w:fill'),'2E6FD4')
-                vr.font.color.rgb = RGBColor(0xFF,0xFF,0xFF)
-                vr.font.bold = True
                 tcPr2.append(shd2)
             margins2 = OxmlElement('w:tcMar')
             for side in ['top','bottom','left','right']:
                 m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'80'); m.set(qn('w:type'),'dxa')
                 margins2.append(m)
             tcPr2.append(margins2)
+            # Split on newlines to support multi-line cell content (e.g. symptoms list)
+            value_lines = value.split('\n') if '\n' in value else [value]
+            for idx_vl, vline in enumerate(value_lines):
+                if idx_vl == 0:
+                    vp = vc.paragraphs[0]
+                else:
+                    vp = vc.add_paragraph()
+                vr = vp.add_run(vline.strip())
+                vr.font.size=Pt(10); vr.font.name="Arial"; vr.font.bold=False
+                if is_header_row:
+                    vr.font.color.rgb = RGBColor(0xFF,0xFF,0xFF)
+                    vr.font.bold = True
 
         def make_table():
             t = doc.add_table(rows=0, cols=2)
@@ -890,6 +903,7 @@ if st.session_state.get("report_text"):
         # ── Parse and render the report ──
         in_table = False
         current_table = None
+        in_dev_history = False
         lines = rt.split('\n')
         i = 0
         while i < len(lines):
@@ -906,6 +920,7 @@ if st.session_state.get("report_text"):
                 re.match(r'^\d+\.\s+[A-Z][A-Z\s&]+$', ls) or
                 ls in ('CLINICAL SUMMARY', 'REPORT HEADER')):
                 in_table = False; current_table = None
+                in_dev_history = 'DEVELOPMENTAL' in ls.upper()
                 add_section_title(ls)
                 continue
 
@@ -915,7 +930,9 @@ if st.session_state.get("report_text"):
                 doc.add_paragraph().paragraph_format.space_after = Pt(2)
                 add_subtable_title(ls)
                 current_table = make_table()
-                add_table_row(current_table, "Field", "Value", is_header_row=True)
+                # Only add header row if NOT in developmental history section
+                if not in_dev_history:
+                    add_table_row(current_table, "Field", "Value", is_header_row=True)
                 in_table = True
                 continue
 
@@ -924,39 +941,31 @@ if st.session_state.get("report_text"):
                 parts = [p.strip() for p in ls.split('|') if p.strip()]
                 # Skip markdown separator rows
                 if all(set(p) <= set('-: ') for p in parts): continue
-                is_new_table = not in_table or current_table is None
-                # Detect if this row is a header row (Field|Value or Milestone|Finding)
-                header_keywords = [
+
+                # Always skip Field|Value and Milestone|Finding header rows —
+                # headers are added programmatically, not from AI output
+                skip_keywords = [
                     ("field","value"), ("milestone","finding"),
                     ("item","detail"), ("category","information")
                 ]
-                is_explicit_header = (
-                    len(parts) >= 2 and
-                    (parts[0].strip('* ').lower(), parts[1].strip('* ').lower()) in header_keywords
-                )
+                if len(parts) >= 2 and (parts[0].strip('* ').lower(), parts[1].strip('* ').lower()) in skip_keywords:
+                    continue  # skip — never render these from AI output
+
+                is_new_table = not in_table or current_table is None
                 if is_new_table:
                     in_table = True
                     current_table = make_table()
-                    if not is_explicit_header:
-                        # Auto header based on context — will be overridden if explicit header found
-                        pass
-                if is_explicit_header:
-                    # Render as styled header row with exact labels given
-                    add_table_row(current_table, parts[0].strip('* '), parts[1].strip('* '), is_header_row=True)
-                elif is_new_table:
-                    # No explicit header row — add default Field|Value header then this row
-                    add_table_row(current_table, "Field", "Value", is_header_row=True)
-                    if len(parts) >= 2:
-                        add_table_row(current_table, parts[0].strip('* '), parts[1])
-                    elif len(parts) == 1:
-                        add_table_row(current_table, parts[0].strip('* '), '')
-                else:
-                    if len(parts) >= 2:
-                        field = parts[0].strip('* ')
-                        value = parts[1]
-                        add_table_row(current_table, field, value)
-                    elif len(parts) == 1:
-                        add_table_row(current_table, parts[0].strip('* '), '')
+                    # Add header row only for non-developmental tables
+                    if not in_dev_history:
+                        add_table_row(current_table, "Field", "Value", is_header_row=True)
+
+                # Handle multi-line symptoms in one cell
+                if len(parts) >= 2:
+                    field = parts[0].strip('* ')
+                    value = ' | '.join(parts[1:])  # rejoin if value contained pipes
+                    add_table_row(current_table, field, value)
+                elif len(parts) == 1:
+                    add_table_row(current_table, parts[0].strip('* '), '')
                 continue
 
             # Separator lines
@@ -988,34 +997,19 @@ if st.session_state.get("report_text"):
                 bidi = OxmlElement("w:bidi"); pPr.append(bidi)
                 jc   = OxmlElement("w:jc"); jc.set(qn("w:val"),"right"); pPr.append(jc)
             r = p.add_run(ls); r.font.size=Pt(11); r.font.name="Arial"
-        doc.add_paragraph(); doc.add_paragraph()
-        p_sep=doc.add_paragraph(); pPr_s=p_sep._p.get_or_add_pPr(); pBdr_s=OxmlElement('w:pBdr')
-        top_s=OxmlElement('w:top'); top_s.set(qn('w:val'),'single')
-        top_s.set(qn('w:sz'),'6'); top_s.set(qn('w:space'),'1'); top_s.set(qn('w:color'),'1A5CB8')
-        pBdr_s.append(top_s); pPr_s.append(pBdr_s)
-        p_dr=doc.add_paragraph()
-        r_dr=p_dr.add_run(doctor["name"]); r_dr.bold=True; r_dr.font.size=Pt(12)
-        r_dr.font.name="Arial"; r_dr.font.color.rgb=CLINIC_BLUE
-        for t in ["title1","title2","title3","title4"]:
-            p_t=doc.add_paragraph(); r_t2=p_t.add_run(doctor[t])
-            r_t2.font.size=Pt(10); r_t2.font.name="Arial"; r_t2.font.color.rgb=RGBColor(0x44,0x44,0x44)
-            p_t.paragraph_format.space_before=Pt(0); p_t.paragraph_format.space_after=Pt(0)
-        doc.add_paragraph()
-        doc.add_paragraph().add_run(f"📍  {doctor['address']}").font.size=Pt(10)
-        r_ph=doc.add_paragraph().add_run(f"📞  {doctor['phone']}")
-        r_ph.font.size=Pt(10); r_ph.bold=True
+        # Footer removed per request
         buf=io.BytesIO(); doc.save(buf); buf.seek(0)
         return buf
 
     col1,col2,col3=st.columns(3)
     with col1:
-        docx_buf=build_docx(rt,pn,rs,rb_,LOGO_PATH,DOCTOR)
+        docx_buf=build_docx(rt,pn,rs,rb_,LOGO_PATH)
         st.download_button("📄 تحميل Word",data=docx_buf,file_name=fn,
                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     with col2:
         if st.button("📧 إرسال بالبريد"):
             try:
-                docx_buf2=build_docx(rt,pn,rs,rb_,LOGO_PATH,DOCTOR)
+                docx_buf2=build_docx(rt,pn,rs,rb_,LOGO_PATH)
                 msg=MIMEMultipart(); msg['From']=GMAIL_USER; msg['To']=RECIPIENT_EMAIL
                 msg['Subject']=f"تقرير التاريخ المرضي — {pn}"
                 msg.attach(MIMEText(f"التقرير المرفق خاص بـ: {pn}\nالنوع: {rs}\nالأخصائي: {rb_}",'plain'))
