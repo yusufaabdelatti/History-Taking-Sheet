@@ -580,7 +580,7 @@ FORMATTING RULES FOR OUTPUT:
 Structure the report using these sections. Include ONLY data that was provided.
 
 REPORT HEADER (top of report, before all sections):
-Write these fields in a clean aligned format — labels in English:
+Write these fields as pipe-separated rows — labels in English only:
 Patient Name | [value]
 Form Type | [value]
 Specialist Name | [value]
@@ -588,6 +588,16 @@ Date | [value]
 Phone Number | [value]
 Add a clear visual separator line after this header.
 The Specialist Name must NOT appear anywhere else in the report.
+
+CLINICAL SUMMARY (immediately after the header, before section 1):
+Write a brief, professional English summary (3-5 sentences maximum).
+Rules:
+- Written in English only.
+- Summarize the most important case information (who, main complaint, key background).
+- DO NOT add diagnosis, assumptions, or information not in the input.
+- DO NOT repeat the exact same wording as the structured sections below.
+- Keep it concise and clinically relevant.
+Write it as a paragraph under the title: CLINICAL SUMMARY
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. PATIENT INFORMATION
@@ -611,10 +621,14 @@ Skip any fields not reported.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MUST be in structured table format — NOT narrative sentences.
 - Split into multiple smaller sub-tables (2–5 rows each).
-- Each sub-table covers one sub-category (e.g. Onset | Course | Referral).
-- Format: | **Field** | Value |
-- Bold Field. Normal Value. Do NOT write paragraphs here.
+- Each sub-table covers one sub-category (e.g. Onset Details | Symptoms).
+- Format: Field | Value
+- Do NOT write paragraphs here.
 - Do NOT include Chief Complaint or HPI text here — those go in section 7.
+- SYMPTOMS RULE: ALL symptoms must be grouped into ONE single row.
+  Field: "Symptoms"
+  Value: list all symptoms each on a new line inside the same cell (use line breaks between them).
+  Do NOT create a separate row per symptom.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {"3. FAMILY AND MARRIAGE BACKGROUND" if is_adult else "3. FAMILY BACKGROUND"}
@@ -747,22 +761,6 @@ if st.session_state.get("report_text"):
         bot.set(qn('w:sz'),'8'); bot.set(qn('w:space'),'4'); bot.set(qn('w:color'),'1A5CB8')
         pBdr.append(bot); pPr.append(pBdr)
         doc.add_paragraph()
-
-        # ── Info box: patient separate from psychologist ──
-        def info_line(label, val):
-            p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(2)
-            p.paragraph_format.space_after = Pt(2)
-            pPr_il = p._p.get_or_add_pPr()
-            jc = OxmlElement("w:jc"); jc.set(qn("w:val"), "right"); pPr_il.append(jc)
-            r1 = p.add_run(val + "  "); r1.font.size=Pt(11); r1.font.name="Arial"
-            r2 = p.add_run(label); r2.bold=True; r2.font.size=Pt(11); r2.font.name="Arial"; r2.font.color.rgb=CLINIC_BLUE
-            return p
-
-        info_line("المريض:", pn)
-        info_line("نوع الاستمارة:", rs)
-        info_line("اسم الأخصائي:", rb_)
-        doc.add_paragraph()
         def add_rtl_para(text, bold=False, size=11, color=None, space_before=0, space_after=4, underline=False):
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(space_before)
@@ -798,27 +796,39 @@ if st.session_state.get("report_text"):
             r.font.size = Pt(11); r.font.name = "Arial"
             r.font.bold = True; r.font.color.rgb = RGBColor(0x1B,0x2A,0x4A)
 
-        def add_table_row(table, field, value, is_first_row=False):
+        def add_table_row(table, field, value, is_header_row=False):
             row = table.add_row()
-            # Field cell — light blue bg, bold
+            # Field cell
             fc = row.cells[0]; fc.text = ""
             fp = fc.paragraphs[0]
             fr = fp.add_run(field); fr.font.size=Pt(10); fr.font.name="Arial"; fr.font.bold=True
             tc1 = fc._tc; tcPr1 = tc1.get_or_add_tcPr()
             shd1 = OxmlElement('w:shd')
             shd1.set(qn('w:val'),'clear'); shd1.set(qn('w:color'),'auto')
-            shd1.set(qn('w:fill'),'E8F0FE')
+            # Header row: deep blue bg + white text; Data row: light blue bg
+            if is_header_row:
+                shd1.set(qn('w:fill'),'1A5CB8')
+                fr.font.color.rgb = RGBColor(0xFF,0xFF,0xFF)
+            else:
+                shd1.set(qn('w:fill'),'E8F0FE')
             tcPr1.append(shd1)
             margins1 = OxmlElement('w:tcMar')
             for side in ['top','bottom','left','right']:
                 m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'80'); m.set(qn('w:type'),'dxa')
                 margins1.append(m)
             tcPr1.append(margins1)
-            # Value cell — white bg, normal
+            # Value cell
             vc = row.cells[1]; vc.text = ""
             vp = vc.paragraphs[0]
             vr = vp.add_run(value); vr.font.size=Pt(10); vr.font.name="Arial"; vr.font.bold=False
             tc2 = vc._tc; tcPr2 = tc2.get_or_add_tcPr()
+            if is_header_row:
+                shd2 = OxmlElement('w:shd')
+                shd2.set(qn('w:val'),'clear'); shd2.set(qn('w:color'),'auto')
+                shd2.set(qn('w:fill'),'2E6FD4')
+                vr.font.color.rgb = RGBColor(0xFF,0xFF,0xFF)
+                vr.font.bold = True
+                tcPr2.append(shd2)
             margins2 = OxmlElement('w:tcMar')
             for side in ['top','bottom','left','right']:
                 m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'80'); m.set(qn('w:type'),'dxa')
@@ -867,6 +877,7 @@ if st.session_state.get("report_text"):
                 doc.add_paragraph().paragraph_format.space_after = Pt(2)
                 add_subtable_title(ls)
                 current_table = make_table()
+                add_table_row(current_table, "Field", "Value", is_header_row=True)
                 in_table = True
                 continue
 
@@ -875,9 +886,11 @@ if st.session_state.get("report_text"):
                 parts = [p.strip() for p in ls.split('|') if p.strip()]
                 # Skip markdown separator rows
                 if all(set(p) <= set('-: ') for p in parts): continue
-                if not in_table or current_table is None:
+                is_new_table = not in_table or current_table is None
+                if is_new_table:
                     in_table = True
                     current_table = make_table()
+                    add_table_row(current_table, "Field", "Value", is_header_row=True)
                 if len(parts) >= 2:
                     field = parts[0].strip('* ')
                     value = parts[1]
