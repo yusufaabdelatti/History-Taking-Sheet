@@ -520,16 +520,48 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 ملاحظات إضافية: {sv(d,'extra_notes')}
 """
 
-        prompt = f"""أنت طبيب نفسي استشاري أول متمرس. بناءً على بيانات التاريخ المرضي أدناه، اكتب تقريراً سريرياً متكاملاً باللغة العربية وفق الهيكل الآتي تماماً.
+        # Build verbatim Arabic section
+        verbatim_block = ""
+        verbatim_fields = [
+            ("الشكوى الرئيسية", sv(d,'complaints')),
+            ("تاريخ المرض الحالي", sv(d,'hpi')),
+            ("تفاصيل الحمل", sv(d,'pregnancy') if not is_adult else ""),
+            ("تاريخ الأدوية - تفاصيل", sv(d,'drug_hx') if is_adult else ""),
+            ("التاريخ المرضي السابق - تفاصيل", sv(d,'past_hx')),
+            ("التاريخ العائلي - تفاصيل", sv(d,'family_hx')),
+            ("الفحوصات - تفاصيل", sv(d,'investigations')),
+            ("الجلسات العلاجية الحالية", sv(d,'therapy') if not is_adult else ""),
+            ("ملاحظات إضافية", sv(d,'extra_notes')),
+        ]
+        for heading, text in verbatim_fields:
+            if text and text != "لم يُذكر":
+                verbatim_block += f"\n{heading}:\n{text}\n"
+        if not verbatim_block:
+            verbatim_block = "(No long text responses provided)"
 
-قواعد صارمة لا تحيد عنها:
-١. اكتب التقرير كاملاً باللغة العربية فقط
-٢. اكتب فقط ما هو مذكور في البيانات — إذا كان الحقل "لم يُذكر" فلا تكتب عنه شيئاً على الإطلاق ولا تذكره
-٣. حوّل كل إجابة "نعم/لا" إلى جملة سردية كاملة مفصّلة (مثال: بدلاً من "التشنجات: نعم" اكتب "يُشار إلى وجود تشنجات في التاريخ المرضي السابق")
-٤. النصوص المكتوبة في الشكاوى وHPI تُنقل حرفياً كما كُتبت دون تعديل
-٥. لا تخترع أي معلومة غير موجودة في البيانات ولا تُضف أي جملة افتراضية
-٦. اجعل التقرير سردياً تفصيلياً وليس قائمة أسئلة وإجابات
-٧. لا تكتب أي قسم إذا كانت جميع بياناته "لم يُذكر"
+        prompt = f"""You are a clinical report formatter. Generate a clean, professional clinical report in ENGLISH based on the structured data below.
+
+STRICT RULES:
+
+LANGUAGE HANDLING:
+1. The main report body must be fully in English — no Arabic text anywhere in sections 1 through 6.
+2. SHORT answers (MCQ, yes/no, single-word): convert to clear natural English sentences.
+   - Correct: "The child is breastfed." / "Sleep is interrupted." / "There is a delay in speech."
+   - Incorrect: "Breastfeeding: طبيعية" / "النوم: متقطع"
+3. LONG text responses (paragraphs, detailed descriptions written in Arabic):
+   - DO NOT translate them.
+   - DO NOT include them anywhere in the main report sections.
+   - Place them ONLY in the final section "Original Arabic Responses" exactly as written.
+4. DO NOT mix Arabic and English in the same sentence or the same section.
+5. Arabic is ONLY allowed in section 7 "Original Arabic Responses".
+
+CONTENT RULES:
+6. DO NOT add interpretations, diagnoses, clinical judgments, or assumptions.
+7. DO NOT add any information not explicitly provided in the data.
+8. If a field is "لم يُذكر" (not reported) — skip it completely, do not mention it.
+9. If all fields in a section are not reported — skip the entire section.
+10. "No" / "لا" answers — do not mention them at all.
+11. FORBIDDEN: No diagnosis, no clinical judgment, no recommendations, no assumptions, no summarization of Arabic text.
 
 Structure the report using these sections. Include ONLY data that was provided:
 
@@ -537,7 +569,7 @@ Structure the report using these sections. Include ONLY data that was provided:
 Present as a clean two-column table (Field | Value). Include only provided fields.
 
 2. PRESENTING CONCERNS
-Convert onset, mode, and course into natural sentences. Do NOT include Chief Complaint or HPI text here — those go in section 7.
+Convert onset, mode, and course into natural English sentences. Do NOT include Chief Complaint or HPI here — those go in section 7.
 
 {"3. FAMILY AND MARRIAGE BACKGROUND" if is_adult else "3. FAMILY BACKGROUND"}
 Convert all MCQ answers into natural English sentences. Free text fields go to section 7.
@@ -546,28 +578,21 @@ Convert all MCQ answers into natural English sentences. Free text fields go to s
 {"" if is_adult else "Present as a clean two-column table (Milestone | Finding). Include only provided milestones."}
 
 {"4. MEDICAL HISTORY" if is_adult else "5. MEDICAL HISTORY"}
-Convert Yes/No answers into natural sentences. Free text details go to section 7.
+Convert Yes/No answers into natural English sentences. Free text details go to section 7.
 
 {"5. BEHAVIORAL AND CLINICAL OBSERVATIONS" if is_adult else "6. BEHAVIORAL AND CLINICAL OBSERVATIONS"}
 Convert all MCQ answers into natural English sentences.
 
-{"6. ADDITIONAL INFORMATION" if is_adult else "6. ADDITIONAL INFORMATION"}
-Any siblings data, referral info, or other structured fields not covered above.
+6. ADDITIONAL INFORMATION
+Include siblings data and any other structured fields not covered above.
 
 7. ORIGINAL ARABIC RESPONSES
-Place ALL long Arabic text fields here verbatim in the output — exactly as written, zero modification.
-Use the arabic verbatim data provided at the end of this prompt under "ARABIC VERBATIM SECTION".
+Copy each item below EXACTLY as written — zero modification, zero translation:
+{verbatim_block}
 
 ══════════════════════════════════════════════
 DATA:
-
-
-══════════════════════════════════════════════
-بيانات التاريخ المرضي:
 {data_block}
-══════════════════════════════════════════════
-ARABIC VERBATIM SECTION (place these under section 7, verbatim, no modification):
-{verbatim_block if verbatim_block else "(No long text responses provided)"}
 ══════════════════════════════════════════════
 History by: {history_by or 'Not reported'} | Sheet: {"Adult" if is_adult else "Child"}
 """
@@ -796,3 +821,4 @@ if st.session_state.get("report_text"):
         if st.button("↺ مريض جديد"):
             for key in list(st.session_state.keys()): del st.session_state[key]
             st.rerun()
+            
