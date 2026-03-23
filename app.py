@@ -686,13 +686,32 @@ Present as a clean two-column table.
 
 {"4. MEDICAL HISTORY" if is_adult else "5. MEDICAL HISTORY"}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Write each finding on a SEPARATE LINE — do NOT combine into paragraphs.
-- One statement per line.
-- Convert Yes/No to natural English sentences, one per line.
-- Free text details go to section 7.
-Example format:
-The patient has a history of previous psychiatric treatment.
-No previous hospitalizations were reported.
+This section MUST contain FOUR mandatory sub-sections, each as a separate sub-table with its own title.
+Write each finding as a separate line — do NOT combine into paragraphs.
+Convert Yes/No answers to natural English sentences, one per line.
+Long text details go to section 7 (Original Arabic Responses).
+
+Sub-section 1 — Sub-table title: Past History:
+Include: previous psychiatric illness, previous hospitalization, and any other past history data.
+{"Also include: high fever, head trauma, convulsions, post-vaccine complications, previous therapy." if not is_adult else ""}
+One finding per line under the sub-table.
+
+Sub-section 2 — Sub-table title: Family History:
+Include: psychiatric illness in family, neurological illness in family{"and intellectual disability and epilepsy in family." if not is_adult else "."}
+One finding per line under the sub-table.
+
+Sub-section 3 — Sub-table title: Investigations:
+Include: {"CT, MRI, EEG, IQ test (SB5), CARS score." if not is_adult else "any investigations done."}
+One finding per line under the sub-table.
+
+Sub-section 4 — Sub-table title: Operations and Surgeries:
+Include: previous surgeries data.
+One finding per line under the sub-table.
+Skip this sub-section entirely if no surgeries were reported.
+
+{"Sub-section 5 — Sub-table title: Drug History:" if is_adult else ""}
+{"Include: whether on medication, compliance, medication details." if is_adult else ""}
+{"One finding per line under the sub-table." if is_adult else ""}
 
 {"5. BEHAVIORAL AND CLINICAL OBSERVATIONS" if is_adult else "6. BEHAVIORAL AND CLINICAL OBSERVATIONS"}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
