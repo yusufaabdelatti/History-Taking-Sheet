@@ -151,7 +151,25 @@ if is_adult:
     c1, c2 = st.columns(2)
     with c1:
         d["name"]       = ti("الاسم الكامل","Full Name","a_name")
-        d["age"]        = ti("السن","Age","a_age")
+        d["birthdate"]  = ti("تاريخ الميلاد","Birth Date","a_birthdate", placeholder="DD/MM/YYYY")
+        # Auto-calculate age
+        import re as _re
+        from datetime import date as _date
+        _bd = st.session_state.get("a_birthdate","")
+        _age_str = ""
+        if _bd:
+            try:
+                _parts = _re.split(r'[/\-\.]', _bd.strip())
+                if len(_parts)==3:
+                    _d,_m,_y = int(_parts[0]),int(_parts[1]),int(_parts[2])
+                    _today = _date.today()
+                    _years = _today.year - _y - ((_today.month,_today.day) < (_m,_d))
+                    _months = (_today.month - _m) % 12
+                    _age_str = f"{_years} years, {_months} months"
+            except: pass
+        d["age"] = _age_str
+        if _age_str:
+            st.caption(f"Calculated Age: **{_age_str}**")
         d["gender"]     = rb("النوع","Gender", GENDER_AR, "a_gender")
         d["education"]  = sel("المستوى التعليمي","Education", EDU_AR, "a_edu")
         d["occupation"] = sel("الوظيفة","Occupation", OCC_AR, "a_occ")
@@ -267,7 +285,25 @@ else:
     c1, c2 = st.columns(2)
     with c1:
         d["name"]        = ti("اسم الطفل كاملاً","Child's Full Name","c_name")
-        d["age"]         = ti("السن","Age","c_age")
+        d["birthdate"]  = ti("تاريخ الميلاد","Birth Date","c_birthdate", placeholder="DD/MM/YYYY")
+        # Auto-calculate age
+        import re as _re2
+        from datetime import date as _date2
+        _bd2 = st.session_state.get("c_birthdate","")
+        _age_str2 = ""
+        if _bd2:
+            try:
+                _parts2 = _re2.split(r'[/\-\.]', _bd2.strip())
+                if len(_parts2)==3:
+                    _d2,_m2,_y2 = int(_parts2[0]),int(_parts2[1]),int(_parts2[2])
+                    _today2 = _date2.today()
+                    _years2 = _today2.year - _y2 - ((_today2.month,_today2.day) < (_m2,_d2))
+                    _months2 = (_today2.month - _m2) % 12
+                    _age_str2 = f"{_years2} years, {_months2} months"
+            except: pass
+        d["age"] = _age_str2
+        if _age_str2:
+            st.caption(f"Calculated Age: **{_age_str2}**")
         d["gender"]      = rb("النوع","Gender", GENDER_AR, "c_gender")
         d["school"]      = ti("اسم المدرسة","School Name","c_school")
         d["grade"]       = ti("الصف الدراسي","Grade","c_grade")
@@ -420,7 +456,7 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 
         if is_adult:
             data_block = f"""
-المريض: {sv(d,'name')} | السن: {sv(d,'age')} | النوع: {sv(d,'gender')}
+المريض: {sv(d,'name')} | تاريخ الميلاد: {sv(d,'birthdate')} | السن: {sv(d,'age')} | النوع: {sv(d,'gender')}
 التاريخ: {sv(d,'date')} | الأخصائي: {history_by or 'لم يُذكر'} | نوع التاريخ: {sv(d,'htype')}
 الهاتف: {sv(d,'phone')} | مصدر الإحالة: {sv(d,'referral')}
 الوظيفة: {sv(d,'occupation')} — {sv(d,'occ_detail')} | التعليم: {sv(d,'education')}
@@ -471,7 +507,7 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 """
         else:
             data_block = f"""
-الطفل: {sv(d,'name')} | السن: {sv(d,'age')} | النوع: {sv(d,'gender')}
+الطفل: {sv(d,'name')} | تاريخ الميلاد: {sv(d,'birthdate')} | السن: {sv(d,'age')} | النوع: {sv(d,'gender')}
 التاريخ: {sv(d,'date')} | الأخصائي: {history_by or 'لم يُذكر'}
 الهاتف: {sv(d,'phone')} | يعيش مع: {sv(d,'lives_with')}
 المدرسة: {sv(d,'school')} | الصف: {sv(d,'grade')} | المستوى الدراسي: {sv(d,'academic')}
@@ -598,6 +634,7 @@ Rules:
 - DO NOT repeat the exact same wording as the structured sections below.
 - Keep it concise and clinically relevant.
 Write it as a paragraph under the title: CLINICAL SUMMARY
+Format this title EXACTLY the same as all other numbered section titles (e.g. "CLINICAL SUMMARY" on its own line, all caps, no symbols).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. PATIENT INFORMATION
@@ -605,16 +642,14 @@ Write it as a paragraph under the title: CLINICAL SUMMARY
 Split into exactly THREE separate sub-tables, each with its own title and 2–5 rows:
 
 Sub-table 1 title: Personal Details
-Fields: Name, Age, Gender, {"Social Status, Education, Occupation" if is_adult else "Birth Order, Lives With, School, Grade, Academic Performance"}
+Fields: Name, Birth Date, Age (auto-calculated), Gender, {"Social Status, Education, Occupation" if is_adult else "Birth Order, Lives With, School, Grade, Academic Performance"}
 
 Sub-table 2 title: {"Lifestyle & Background" if is_adult else "Daily Routine & Screen Time"}
 Fields: {"Smoking, Hobbies, Referral Source, History Type" if is_adult else "Screen Time, Referral Source, History Type"}
 
-Sub-table 3 title: Contact & Administrative
-Fields: Phone, Date, {"any remaining fields" if is_adult else "any remaining fields"}
-
 Each sub-table format — Field | Value (do not bold inside the row, builder handles it).
 Skip any fields not reported.
+Do NOT create a "Contact and Administrative" sub-table — these fields are in the header only.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 2. PRESENTING CONCERNS
@@ -643,9 +678,10 @@ MUST be in structured table format — NOT narrative sentences.
 {"" if is_adult else """━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 4. DEVELOPMENTAL HISTORY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Present as a clean two-column table (Milestone | Finding).
-- Bold Milestone column. Normal Finding column.
+Present as a clean two-column table.
 - Split into sub-tables: Pregnancy & Birth | Feeding & Growth | Language & Cognition.
+- Each sub-table MUST start with this header row: Milestone | Finding
+- Do NOT use Field | Value for developmental history tables — use Milestone | Finding instead.
 - Include only provided milestones. Skip not reported ones."""}
 
 {"4. MEDICAL HISTORY" if is_adult else "5. MEDICAL HISTORY"}
@@ -866,7 +902,9 @@ if st.session_state.get("report_text"):
 
             # Section title: starts with digit + dot + space + CAPS (e.g. "1. PATIENT INFORMATION")
             import re
-            if re.match(r'^\d+\.\s+[A-Z\s]+$', ls) or re.match(r'^\d+\.\s+[A-Z][A-Z\s&]+$', ls):
+            if (re.match(r'^\d+\.\s+[A-Z\s]+$', ls) or
+                re.match(r'^\d+\.\s+[A-Z][A-Z\s&]+$', ls) or
+                ls in ('CLINICAL SUMMARY', 'REPORT HEADER')):
                 in_table = False; current_table = None
                 add_section_title(ls)
                 continue
@@ -887,16 +925,38 @@ if st.session_state.get("report_text"):
                 # Skip markdown separator rows
                 if all(set(p) <= set('-: ') for p in parts): continue
                 is_new_table = not in_table or current_table is None
+                # Detect if this row is a header row (Field|Value or Milestone|Finding)
+                header_keywords = [
+                    ("field","value"), ("milestone","finding"),
+                    ("item","detail"), ("category","information")
+                ]
+                is_explicit_header = (
+                    len(parts) >= 2 and
+                    (parts[0].strip('* ').lower(), parts[1].strip('* ').lower()) in header_keywords
+                )
                 if is_new_table:
                     in_table = True
                     current_table = make_table()
+                    if not is_explicit_header:
+                        # Auto header based on context — will be overridden if explicit header found
+                        pass
+                if is_explicit_header:
+                    # Render as styled header row with exact labels given
+                    add_table_row(current_table, parts[0].strip('* '), parts[1].strip('* '), is_header_row=True)
+                elif is_new_table:
+                    # No explicit header row — add default Field|Value header then this row
                     add_table_row(current_table, "Field", "Value", is_header_row=True)
-                if len(parts) >= 2:
-                    field = parts[0].strip('* ')
-                    value = parts[1]
-                    add_table_row(current_table, field, value)
-                elif len(parts) == 1:
-                    add_table_row(current_table, parts[0].strip('* '), '')
+                    if len(parts) >= 2:
+                        add_table_row(current_table, parts[0].strip('* '), parts[1])
+                    elif len(parts) == 1:
+                        add_table_row(current_table, parts[0].strip('* '), '')
+                else:
+                    if len(parts) >= 2:
+                        field = parts[0].strip('* ')
+                        value = parts[1]
+                        add_table_row(current_table, field, value)
+                    elif len(parts) == 1:
+                        add_table_row(current_table, parts[0].strip('* '), '')
                 continue
 
             # Separator lines
