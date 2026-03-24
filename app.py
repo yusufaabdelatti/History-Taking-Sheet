@@ -82,6 +82,25 @@ def sv(d, key, default="لم يُذكر"):
     v = str(v).strip()
     return v if v and v not in ["—", "— اختر —", "لم يُذكر"] else default
 
+def yn_table(questions, d):
+    """Render a clean Yes/No/N-A table for a list of (label_ar, label_en, key) tuples."""
+    st.markdown("""
+    <style>
+    .yn-table { width:100%; border-collapse:collapse; margin-bottom:10px; }
+    .yn-table td { padding:7px 10px; font-size:13px; border-bottom:1px solid #e0e6f0; }
+    .yn-table tr:last-child td { border-bottom:none; }
+    .yn-table tr:hover td { background:#f5f8ff; }
+    .yn-label { color:#222; font-weight:500; width:65%; }
+    </style>""", unsafe_allow_html=True)
+    for (ar, en, key, opts) in questions:
+        col_q, col_a = st.columns([3, 2])
+        with col_q:
+            st.markdown(f'<div style="padding:6px 0;font-size:13px;font-weight:500;color:#222">{ar}<br><span style="color:#888;font-size:11px">{en}</span></div>', unsafe_allow_html=True)
+        with col_a:
+            d[key] = st.radio("", opts, key=f"yn_{key}", horizontal=True, label_visibility="collapsed")
+        st.markdown('<hr style="margin:0;border:none;border-top:1px solid #eef0f5">', unsafe_allow_html=True)
+    return d
+
 # ── قوائم الاختيارات ──
 NA           = "— اختر —"
 نعم_لا_لاينطبق = ["نعم", "لا", "لا ينطبق"]
@@ -240,38 +259,44 @@ if is_adult:
     d["hpi"]        = ta("تاريخ المرض الحالي بالتفصيل (HPI)","HPI", "a_hpi", 220)
 
     sec("تاريخ الأدوية", "Drug History")
-    d["on_meds"]    = rb("هل يتناول أدوية حالياً؟","On medication?", نعم_لا_لاينطبق, "a_onmeds")
+    yn_table([
+        ("هل يتناول أدوية حالياً؟","Currently on medication?","on_meds", نعم_لا_لاينطبق),
+    ], d)
     d["compliance"] = sel("الالتزام بالأدوية","Compliance", COMPLIANCE, "a_comp")
     d["drug_hx"]    = ta("تفاصيل الأدوية (الاسم، الجرعة، المدة)","Medications", "a_drug", 100)
 
     sec("التاريخ المرضي السابق", "Past History")
-    c1,c2 = st.columns(2)
-    with c1: d["prev_psych"] = rb("مرض نفسي سابق؟","Previous psychiatric?", نعم_لا_لاينطبق, "a_ppsych")
-    with c2: d["prev_hosp"]  = rb("دخول مستشفى سابق؟","Previous hospitalization?", نعم_لا_لاينطبق, "a_phosp")
+    yn_table([
+        ("مرض نفسي سابق؟","Previous psychiatric illness?","prev_psych", نعم_لا_لاينطبق),
+        ("دخول مستشفى سابق؟","Previous hospitalization?","prev_hosp", نعم_لا_لاينطبق),
+    ], d)
     d["past_hx"] = ta("تفاصيل التاريخ السابق","Details","a_past",80)
 
     sec("التاريخ العائلي", "Family History")
-    c1, c2 = st.columns(2)
-    with c1:
-        d["fam_psych"]  = rb("مرض نفسي في الأسرة؟","Psychiatric in family?", نعم_لا_لاينطبق, "a_fpsych")
-        if st.session_state.get("a_fpsych") == "نعم":
-            d["fam_psych_details"] = ti("ما هو المرض النفسي؟ (من في الأسرة)","Specify psychiatric illness","a_fpsych_det")
-        else:
-            d["fam_psych_details"] = ""
-    with c2:
-        d["fam_neuro"]  = rb("مرض عصبي في الأسرة؟","Neurological in family?", نعم_لا_لاينطبق, "a_fneuro")
-        if st.session_state.get("a_fneuro") == "نعم":
-            d["fam_neuro_details"] = ti("ما هو المرض العصبي؟ (من في الأسرة)","Specify neurological illness","a_fneuro_det")
-        else:
-            d["fam_neuro_details"] = ""
+    yn_table([
+        ("مرض نفسي في الأسرة؟","Psychiatric illness in family?","fam_psych", نعم_لا_لاينطبق),
+        ("مرض عصبي في الأسرة؟","Neurological illness in family?","fam_neuro", نعم_لا_لاينطبق),
+    ], d)
+    if d.get("fam_psych") == "نعم":
+        d["fam_psych_details"] = ti("ما هو المرض النفسي؟ (من في الأسرة)","Specify psychiatric illness","a_fpsych_det")
+    else:
+        d["fam_psych_details"] = ""
+    if d.get("fam_neuro") == "نعم":
+        d["fam_neuro_details"] = ti("ما هو المرض العصبي؟ (من في الأسرة)","Specify neurological illness","a_fneuro_det")
+    else:
+        d["fam_neuro_details"] = ""
     d["family_hx"] = ta("تفاصيل التاريخ العائلي","Details","a_famhx",80)
 
     sec("الفحوصات", "Investigations")
-    d["had_inv"]       = rb("هل أُجريت فحوصات؟","Investigations done?", نعم_لا_لاينطبق, "a_hadinv")
-    d["investigations"]= ta("تفاصيل الفحوصات ونتائجها","Details","a_inv",80)
+    yn_table([
+        ("هل أُجريت فحوصات؟","Investigations done?","had_inv", نعم_لا_لاينطبق),
+    ], d)
+    d["investigations"] = ta("تفاصيل الفحوصات ونتائجها","Details","a_inv",80)
 
     sec("العمليات والجراحات", "Operations and Surgeries")
-    d["had_surg"]  = rb("عمليات جراحية سابقة؟","Previous surgeries?", نعم_لا_لاينطبق, "a_hsurg")
+    yn_table([
+        ("عمليات جراحية سابقة؟","Previous surgeries?","had_surg", نعم_لا_لاينطبق),
+    ], d)
     d["surgeries"] = ta("تفاصيل العمليات","Details","a_surg",60)
 
     sec("التقييم السريري", "Clinical Assessment")
@@ -399,65 +424,68 @@ else:
     d["hpi"]        = ta("تاريخ المرض الحالي بالتفصيل (HPI)","HPI","c_hpi",220)
 
     sec("التاريخ المرضي السابق", "Past History")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        d["high_fever"]   = rb("حرارة ≥40 درجة؟","High fever?", نعم_لا_لاينطبق, "c_hfever")
-        d["head_trauma"]  = rb("ارتطام رأس؟","Head trauma?", نعم_لا_لاينطبق, "c_htrauma")
-        if st.session_state.get("c_htrauma") == "نعم":
+    yn_table([
+        ("حرارة ≥40 درجة؟","High fever ≥40°C?","high_fever", نعم_لا_لاينطبق),
+        ("ارتطام رأس؟","Head trauma?","head_trauma", نعم_لا_لاينطبق),
+        ("تشنجات؟","Convulsions?","convulsions", نعم_لا_لاينطبق),
+        ("مضاعفات بعد التطعيم؟","Post-vaccine complications?","post_vaccine", نعم_لا_لاينطبق),
+        ("دخول مستشفى سابق؟","Previous hospitalization?","prev_hosp", نعم_لا_لاينطبق),
+        ("جلسات علاجية سابقة؟","Previous therapy sessions?","prev_therapy", نعم_لا_لاينطبق),
+    ], d)
+    if d.get("head_trauma") == "نعم":
+        c1, c2 = st.columns(2)
+        with c1:
             d["head_trauma_location"] = ti("مكان الارتطام في الرأس","Location on head","c_htrauma_loc")
+        with c2:
             d["head_trauma_details"]  = ti("كيف حدث الارتطام؟","How did it happen?","c_htrauma_det")
-        else:
-            d["head_trauma_location"] = ""
-            d["head_trauma_details"]  = ""
-    with c2:
-        d["convulsions"]  = rb("تشنجات؟","Convulsions?", نعم_لا_لاينطبق, "c_conv")
-        d["post_vaccine"] = rb("مضاعفات بعد التطعيم؟","Post-vaccine comp.?", نعم_لا_لاينطبق, "c_pvacc")
-    with c3:
-        d["prev_hosp"]    = rb("دخول مستشفى سابق؟","Previous hospitalization?", نعم_لا_لاينطبق, "c_phosp")
-        d["prev_therapy"] = rb("جلسات علاجية سابقة؟","Previous therapy?", نعم_لا_لاينطبق, "c_pther")
+    else:
+        d["head_trauma_location"] = ""
+        d["head_trauma_details"]  = ""
     d["past_hx"] = ta("تفاصيل التاريخ السابق","Details","c_past",100)
 
     sec("التاريخ العائلي", "Family History")
-    c1, c2 = st.columns(2)
-    with c1:
-        d["fam_psych"]   = rb("مرض نفسي في الأسرة؟","Psychiatric in family?", نعم_لا_لاينطبق, "c_fpsych")
-        if st.session_state.get("c_fpsych") == "نعم":
-            d["fam_psych_details"] = ti("ما هو المرض النفسي؟ (من في الأسرة)","Specify psychiatric illness","c_fpsych_det")
-        else:
-            d["fam_psych_details"] = ""
-        d["fam_neuro"]   = rb("مرض عصبي في الأسرة؟","Neurological in family?", نعم_لا_لاينطبق, "c_fneuro")
-        if st.session_state.get("c_fneuro") == "نعم":
-            d["fam_neuro_details"] = ti("ما هو المرض العصبي؟ (من في الأسرة)","Specify neurological illness","c_fneuro_det")
-        else:
-            d["fam_neuro_details"] = ""
-    with c2:
-        d["fam_mr"]      = rb("إعاقة ذهنية في الأسرة؟","MR in family?", نعم_لا_لاينطبق, "c_fmr")
-        if st.session_state.get("c_fmr") == "نعم":
-            d["fam_mr_details"] = ti("من في الأسرة؟ وما درجة الإعاقة؟","Specify MR details","c_fmr_det")
-        else:
-            d["fam_mr_details"] = ""
-        d["fam_epilepsy"]= rb("صرع في الأسرة؟","Epilepsy in family?", نعم_لا_لاينطبق, "c_fepil")
-        if st.session_state.get("c_fepil") == "نعم":
-            d["fam_epilepsy_details"] = ti("من في الأسرة؟ وهل يتعالج؟","Specify epilepsy details","c_fepil_det")
-        else:
-            d["fam_epilepsy_details"] = ""
+    yn_table([
+        ("مرض نفسي في الأسرة؟","Psychiatric illness in family?","fam_psych", نعم_لا_لاينطبق),
+        ("مرض عصبي في الأسرة؟","Neurological illness in family?","fam_neuro", نعم_لا_لاينطبق),
+        ("إعاقة ذهنية في الأسرة؟","Intellectual disability in family?","fam_mr", نعم_لا_لاينطبق),
+        ("صرع في الأسرة؟","Epilepsy in family?","fam_epilepsy", نعم_لا_لاينطبق),
+    ], d)
+    if d.get("fam_psych") == "نعم":
+        d["fam_psych_details"] = ti("ما هو المرض النفسي؟ (من في الأسرة)","Specify psychiatric illness","c_fpsych_det")
+    else:
+        d["fam_psych_details"] = ""
+    if d.get("fam_neuro") == "نعم":
+        d["fam_neuro_details"] = ti("ما هو المرض العصبي؟ (من في الأسرة)","Specify neurological illness","c_fneuro_det")
+    else:
+        d["fam_neuro_details"] = ""
+    if d.get("fam_mr") == "نعم":
+        d["fam_mr_details"] = ti("من في الأسرة؟ وما درجة الإعاقة؟","Specify MR details","c_fmr_det")
+    else:
+        d["fam_mr_details"] = ""
+    if d.get("fam_epilepsy") == "نعم":
+        d["fam_epilepsy_details"] = ti("من في الأسرة؟ وهل يتعالج؟","Specify epilepsy details","c_fepil_det")
+    else:
+        d["fam_epilepsy_details"] = ""
     d["family_hx"] = ta("تفاصيل التاريخ العائلي","Details","c_famhx",80)
 
     sec("الفحوصات", "Investigations")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        d["had_ct"]   = rb("أشعة مقطعية؟","CT?", نعم_لا_لاينطبق, "c_ct")
-        d["had_mri"]  = rb("رنين مغناطيسي؟","MRI?", نعم_لا_لاينطبق, "c_mri")
-    with c2:
-        d["had_eeg"]  = rb("رسم مخ (EEG)؟","EEG?", نعم_لا_لاينطبق, "c_eeg")
-        d["had_iq"]   = rb("اختبار ذكاء SB5؟","IQ test?", نعم_لا_لاينطبق, "c_iq")
-    with c3:
-        d["had_cars"] = rb("مقياس CARS؟","CARS?", نعم_لا_لاينطبق, "c_cars")
-        d["cars_score"]= ti("درجة CARS (إن أُجري)","CARS score","c_carsscore")
-    d["investigations"]= ta("تفاصيل الفحوصات ونتائجها","Details","c_inv",80)
+    yn_table([
+        ("أشعة مقطعية؟","CT scan?","had_ct", نعم_لا_لاينطبق),
+        ("رنين مغناطيسي؟","MRI?","had_mri", نعم_لا_لاينطبق),
+        ("رسم مخ (EEG)؟","EEG?","had_eeg", نعم_لا_لاينطبق),
+        ("اختبار ذكاء SB5؟","IQ test (SB5)?","had_iq", نعم_لا_لاينطبق),
+        ("مقياس CARS؟","CARS scale?","had_cars", نعم_لا_لاينطبق),
+    ], d)
+    if d.get("had_cars") == "نعم":
+        d["cars_score"] = ti("درجة CARS","CARS score","c_carsscore")
+    else:
+        d["cars_score"] = ""
+    d["investigations"] = ta("تفاصيل الفحوصات ونتائجها","Details","c_inv",80)
 
     sec("العمليات والجراحات", "Operations and Surgeries")
-    d["had_surg"]  = rb("عمليات جراحية سابقة؟","Previous surgeries?", نعم_لا_لاينطبق, "c_hsurg")
+    yn_table([
+        ("عمليات جراحية سابقة؟","Previous surgeries?","had_surg", نعم_لا_لاينطبق),
+    ], d)
     d["surgeries"] = ta("تفاصيل العمليات","Details","c_surg",60)
 
     sec("التقييم السريري", "Clinical Assessment")
