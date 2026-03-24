@@ -39,10 +39,9 @@ DOCTOR = {
 
 with st.sidebar:
     st.header("⚙️ الإعدادات")
-    groq_key   = st.text_input("مفتاح Groq API", type="password", placeholder="gsk_...")
-    st.caption("احصل على مفتاح مجاني من [console.groq.com](https://console.groq.com)")
-    st.divider()
     history_by = st.text_input("اسم الأخصائي / Psychologist Name")
+
+groq_key = st.secrets["GROQ_API_KEY"]
 
 st.markdown('<div class="main-title">🧠 استمارة أخذ التاريخ المرضي</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">عيادة د. هاني الحناوي — طب وجراحة الأعصاب والنفس</div>', unsafe_allow_html=True)
@@ -477,9 +476,7 @@ else:
 # ════════════════════════════════════════════════════════
 st.divider()
 if st.button("✦ توليد التقرير / Generate Report", type="primary", use_container_width=True):
-    if not groq_key:
-        st.error("الرجاء إدخال مفتاح Groq API في الشريط الجانبي.")
-    else:
+    if True:
         siblings = d.get("siblings", [])
         sib_text = "\n".join([
             f"  {i+1}. {sb['name']} | {sb['gender']} | السن: {sb['age']} | التعليم: {sb['edu']} | ملاحظات: {sb['notes'] or 'لا يوجد'}"
@@ -607,170 +604,102 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
         if not verbatim_block:
             verbatim_block = "(No long text responses provided)"
 
-        prompt = f"""You are a clinical report formatter. Generate a clean, professional clinical report in ENGLISH based on the structured data below.
+        prompt = f"""You are a clinical report formatter. Generate a COMPACT, professional clinical report in ENGLISH.
+TARGET: 2–3 pages maximum. Every section must be dense and space-efficient.
 
-STRICT RULES:
-
-LANGUAGE HANDLING:
-1. The main report body must be fully in English — no Arabic text anywhere in sections 1 through 6.
-2. SHORT answers (MCQ, yes/no, single-word): convert to clear natural English sentences.
-   - Correct: "The child is breastfed." / "Sleep is interrupted." / "There is a delay in speech."
-   - Incorrect: "Breastfeeding: طبيعية" / "النوم: متقطع"
-3. LONG text responses (paragraphs, detailed descriptions written in Arabic):
-   - DO NOT translate them.
-   - DO NOT include them anywhere in the main report sections.
-   - Place them ONLY in the final section "Original Arabic Responses" exactly as written.
-4. DO NOT mix Arabic and English in the same sentence or the same section.
-5. Arabic is ONLY allowed in section 7 "Original Arabic Responses".
+═══════════════════════════════════════════════
+LANGUAGE RULES:
+1. Main report (sections 1–8): English ONLY. No Arabic text.
+2. Short answers / MCQ / Yes-No / single words: convert to concise English inline (e.g. Sleep: Interrupted | Appetite: Decreased).
+3. Long Arabic text (paragraphs, narratives): DO NOT translate. Place ONLY in final section "Original Arabic Responses" verbatim.
+4. Never mix Arabic and English in the same sentence or section.
 
 CONTENT RULES:
-6. DO NOT add interpretations, diagnoses, clinical judgments, or assumptions.
-7. DO NOT add any information not explicitly provided in the data.
-8. If a field is "لم يُذكر" (not reported) — skip it completely, do not mention it.
-9. If all fields in a section are not reported — skip the entire section.
-10. "No" / "لا" answers — do not mention them at all.
-11. FORBIDDEN: No diagnosis, no clinical judgment, no recommendations, no assumptions, no summarization of Arabic text.
+5. DO NOT add diagnosis, interpretation, clinical judgment, assumptions, or recommendations.
+6. DO NOT add any information not in the input.
+7. Skip any field that is "لم يُذكر" (not reported). Skip entire sections if all fields are empty.
+8. "No" / "لا" answers: omit entirely unless clinically significant.
 
-FORMATTING RULES FOR OUTPUT:
-12. Do NOT use any markdown symbols for bold (no **, no __, no ##, no #).
-    Use ONLY plain text. Bold rendering will be handled by the document builder.
-13. For section titles: write them in ALL CAPS on their own line, preceded by the section number.
-    Example: "1. PATIENT INFORMATION" — no symbols before or after.
-14. For sub-table titles: write them in Title Case on their own line, followed by a colon.
-    Example: "Personal Details:" or "Father Information:"
-15. For table rows: use pipe format exactly like this:
-    Field | Value
-    Do NOT bold inside the pipe row. The builder will bold the field.
-16. For line-by-line sections: write one statement per line, no bullet symbols.
-17. The Specialist Name must appear ONLY in the header section at the top, nowhere else.
-18. No hashtags, no asterisks, no markdown of any kind anywhere in the output.
+COMPACT FORMATTING RULES:
+9. No markdown symbols (no **, no __, no ##, no #, no ---, no bullet dashes).
+10. Section titles: ALL CAPS on own line with number. Example: "1. PATIENT INFORMATION"
+11. Sub-table titles: Title Case followed by colon. Example: "Personal Details:"
+12. Table rows: pipe format exactly — Field | Value
+13. Where possible, group multiple short fields on one row using inline format: Field A: Value A  |  Field B: Value B
+14. For brief observations/findings: inline format per line, no tables. Example: Sleep: Interrupted
+15. Specialist Name appears ONLY in the header block, never repeated.
+16. No blank lines between table rows. Minimal blank lines between sub-sections.
+17. Avoid sub-tables with only 1–2 rows — merge them into the nearest logical table.
 
-Structure the report using these sections. Include ONLY data that was provided.
+═══════════════════════════════════════════════
+REPORT STRUCTURE (follow this exact order):
 
-REPORT HEADER (top of report, before all sections):
-Write these fields as pipe-separated rows — labels in English only:
+REPORT HEADER:
 Patient Name | [value]
 Form Type | [value]
 Specialist Name | [value]
-Date | [value]
-Phone Number | [value]
-Add a clear visual separator line after this header.
-The Specialist Name must NOT appear anywhere else in the report.
-
-CLINICAL SUMMARY (immediately after the header, before section 1):
-Write a brief, professional English summary (3-5 sentences maximum).
-Rules:
-- Written in English only.
-- Summarize the most important case information (who, main complaint, key background).
-- DO NOT add diagnosis, assumptions, or information not in the input.
-- DO NOT repeat the exact same wording as the structured sections below.
-- Keep it concise and clinically relevant.
-Write it as a paragraph under the title: CLINICAL SUMMARY
-Format this title EXACTLY the same as all other numbered section titles (e.g. "CLINICAL SUMMARY" on its own line, all caps, no symbols).
-
+Date | [value]  |  Phone | [value]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CLINICAL SUMMARY
+Write 2–4 concise clinical sentences covering: patient identity, chief complaint, key background. English only. No diagnosis. No repetition of structured fields verbatim.
+
 1. PATIENT INFORMATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Split into exactly THREE separate sub-tables, each with its own title and 2–5 rows:
+Single compact table combining personal, social, and lifestyle fields.
+{"Fields to include: Name, DOB, Age, Gender, Education, Occupation, Social Status, Smoking, Hobbies, Referral Source, History Type" if is_adult else "Fields to include: Name, DOB, Age, Gender, Birth Order, Lives With, School, Grade, Academic Level, Screen Time, Referral Source, History Type"}
+Use inline grouping: e.g. DOB: [value]  |  Age: [value]  |  Gender: [value]
+Skip fields not reported.
 
-Sub-table 1 title: Personal Details
-Fields: Name, Birth Date, Age (auto-calculated), Gender, {"Social Status, Education, Occupation" if is_adult else "Birth Order, Lives With, School, Grade, Academic Performance"}
-
-Sub-table 2 title: {"Lifestyle & Background" if is_adult else "Daily Routine & Screen Time"}
-Fields: {"Smoking, Hobbies, Referral Source, History Type" if is_adult else "Screen Time, Referral Source, History Type"}
-
-Each sub-table format — Field | Value (do not bold inside the row, builder handles it).
-Skip any fields not reported.
-Do NOT create a "Contact and Administrative" sub-table — these fields are in the header only.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 2. PRESENTING CONCERNS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This section has TWO parts only:
+Two compact parts:
+Part A — single small table (3 rows max):
+Onset | [value]
+Mode | [value]
+Course | [value]
+Part B — Symptoms (inline, one per line, no table):
+Write each symptom as a plain line. Example: Difficulty concentrating
 
-PART A — Onset Details:
-Present onset, mode of onset, and course as a table (Field | Value rows, 2-3 rows max).
-Sub-table title: Onset Details:
+3. {"FAMILY & MARRIAGE BACKGROUND" if is_adult else "FAMILY BACKGROUND"}
+Compact tables, group related fields together:
+Parents table: Father name/age/occupation/status + Mother name/age/occupation/status in one table (4 rows max).
+{"Marriage table: Spouse name/age/occupation, Duration, Engagement, Children, Quality — all in one table." if is_adult else ""}
+Parents relationship + consanguinity inline.
+Siblings: one compact table, one row per sibling.
 
-PART B — Symptoms:
-Write ONLY the sub-table title: Symptoms:
-Then write each symptom on its own line below the title — do NOT put them in a table.
-Do NOT include Chief Complaint or HPI text here — those go in section 7.
+{"" if is_adult else """4. DEVELOPMENTAL HISTORY
+Compact tables, no header rows, group into two tables:
+Table A — Birth & Feeding: Pregnancy, Birth type, Complications, Vaccinations, Breastfeeding, Weaning, Teething, Toilet training.
+Table B — Development: Motor, Speech, Attention, Concentration, Comprehension.
+Include only provided milestones."""}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{"3. FAMILY AND MARRIAGE BACKGROUND" if is_adult else "3. FAMILY BACKGROUND"}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MUST be in structured table format — NOT narrative sentences.
-- Split into multiple smaller sub-tables (2–5 rows each).
-- Sub-categories: Father | Mother | Parents Relationship | {"Marriage Details | " if is_adult else ""}Siblings.
-- Format: | **Field** | Value |
-- Bold Field. Normal Value. No paragraphs.
-- Free text fields go to section 7.
+{"4. PAST HISTORY" if is_adult else "5. PAST HISTORY"}
+Single compact table with all past history items:
+{"Fields: Previous psychiatric illness, Previous hospitalization, Drug history (on medication/compliance)." if is_adult else "Fields: High fever, Head trauma, Convulsions, Post-vaccine complications, Previous hospitalization, Previous therapy."}
+One row per finding. Skip if not reported.
 
-{"" if is_adult else """━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-4. DEVELOPMENTAL HISTORY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Present as a clean two-column table.
-- Split into sub-tables: Pregnancy & Birth | Feeding & Growth | Language & Cognition.
-- Do NOT add any header row to developmental history tables.
-- Tables start directly with data rows (no Field|Value, no Milestone|Finding header).
-- Include only provided milestones. Skip not reported ones."""}
+{"5. FAMILY HISTORY" if is_adult else "6. FAMILY HISTORY"}
+Single compact table:
+{"Fields: Psychiatric in family, Neurological in family, Chronic illness." if is_adult else "Fields: Psychiatric in family, Neurological in family, Intellectual disability in family, Epilepsy in family."}
 
-{"4. MEDICAL HISTORY" if is_adult else "5. MEDICAL HISTORY"}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This section MUST contain FOUR mandatory sub-sections, each as a separate sub-table with its own title.
-Write each finding as a separate line — do NOT combine into paragraphs.
-Convert Yes/No answers to natural English sentences, one per line.
-Long text details go to section 7 (Original Arabic Responses).
+{"6. MEDICAL / BEHAVIORAL OBSERVATIONS" if is_adult else "7. MEDICAL / BEHAVIORAL OBSERVATIONS"}
+Inline format, one item per line (no table):
+{"Sleep: [value]  |  Appetite: [value]  |  Suicidal ideation: [value]  |  Insight: [value]  |  Substance use: [value]" if is_adult else "Sleep: [value]  |  Appetite: [value]"}
+{"" if is_adult else "Attention: [value]  |  Concentration: [value]  |  Comprehension: [value]"}
+{"" if is_adult else "Punishment methods: [value]  |  Stress reaction: [value]"}
+Any additional observations inline.
 
-Sub-section 1 — Sub-table title: Past History:
-Include: previous psychiatric illness, previous hospitalization, and any other past history data.
-{"Also include: high fever, head trauma, convulsions, post-vaccine complications, previous therapy." if not is_adult else ""}
-One finding per line under the sub-table.
+{"7. INVESTIGATIONS" if is_adult else "8. INVESTIGATIONS"}
+{"Single compact table: investigations done, details." if is_adult else "Single compact table: CT, MRI, EEG, IQ (SB5), CARS score. One row per test."}
+Skip if none reported.
 
-Sub-section 2 — Sub-table title: Family History:
-Include: psychiatric illness in family, neurological illness in family{"and intellectual disability and epilepsy in family." if not is_adult else "."}
-One finding per line under the sub-table.
-
-Sub-section 3 — Sub-table title: Investigations:
-Include: {"CT, MRI, EEG, IQ test (SB5), CARS score." if not is_adult else "any investigations done."}
-One finding per line under the sub-table.
-
-Sub-section 4 — Sub-table title: Operations and Surgeries:
-Include: previous surgeries data.
-One finding per line under the sub-table.
-Skip this sub-section entirely if no surgeries were reported.
-
-{"Sub-section 5 — Sub-table title: Drug History:" if is_adult else ""}
-{"Include: whether on medication, compliance, medication details." if is_adult else ""}
-{"One finding per line under the sub-table." if is_adult else ""}
-
-{"5. BEHAVIORAL AND CLINICAL OBSERVATIONS" if is_adult else "6. BEHAVIORAL AND CLINICAL OBSERVATIONS"}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Write each observation on a SEPARATE LINE — do NOT combine into paragraphs.
-- One statement per line.
-- Convert each MCQ answer to a natural English sentence.
-- Each line = one clear piece of information.
-Example format:
-Sleep is interrupted.
-Appetite is decreased.
-Punishment methods used include verbal and withdrawal of privileges.
-
-6. ADDITIONAL INFORMATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Include siblings data and any other structured fields not covered above.
-One item per line.
-
-7. ORIGINAL ARABIC RESPONSES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Copy each item below EXACTLY as written — zero modification, zero translation.
-Present each one under its heading with a clear separator:
+{"8. ORIGINAL ARABIC RESPONSES" if is_adult else "9. ORIGINAL ARABIC RESPONSES"}
+Copy each item EXACTLY as written — no modification, no translation, no summarization.
 {verbatim_block}
 
-══════════════════════════════════════════════
+═══════════════════════════════════════════════
 DATA:
 {data_block}
-══════════════════════════════════════════════
+═══════════════════════════════════════════════
 History by: {history_by or 'Not reported'} | Sheet: {"Adult" if is_adult else "Child"}
 """
 
@@ -780,7 +709,7 @@ History by: {history_by or 'Not reported'} | Sheet: {"Adult" if is_adult else "C
                 response = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=3500
+                    max_tokens=4000
                 )
                 st.session_state["report_text"] = response.choices[0].message.content
                 st.session_state["report_pname"]= patient_name
@@ -806,8 +735,8 @@ if st.session_state.get("report_text"):
     def build_docx(rt, pn, rs, rb_, logo_path):
         doc = Document()
         for section in doc.sections:
-            section.top_margin=Cm(2.5); section.bottom_margin=Cm(2.5)
-            section.left_margin=Cm(2.5); section.right_margin=Cm(2.5)
+            section.top_margin=Cm(1.8); section.bottom_margin=Cm(1.8)
+            section.left_margin=Cm(2.0); section.right_margin=Cm(2.0)
             section.different_first_page_header_footer=True
             for hdr in [section.header, section.first_page_header]:
                 for p in hdr.paragraphs: p.clear()
@@ -838,7 +767,7 @@ if st.session_state.get("report_text"):
                 else:
                     instr=OxmlElement('w:instrText'); instr.text=text; run._r.append(instr)
         p_top=doc.add_paragraph()
-        p_top.paragraph_format.space_before=Pt(0); p_top.paragraph_format.space_after=Pt(6)
+        p_top.paragraph_format.space_before=Pt(0); p_top.paragraph_format.space_after=Pt(4)
         if os.path.exists(logo_path):
             p_top.add_run().add_picture(logo_path,width=Inches(1.2))
         r_t=p_top.add_run("   التقرير السريري للتاريخ المرضي")
@@ -863,8 +792,8 @@ if st.session_state.get("report_text"):
 
         def add_section_title(text):
             p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(16)
-            p.paragraph_format.space_after  = Pt(4)
+            p.paragraph_format.space_before = Pt(10)
+            p.paragraph_format.space_after  = Pt(2)
             p.paragraph_format.keep_with_next = True  # stay with first content below
             r = p.add_run(text.strip('# '))
             r.font.size = Pt(13); r.font.name = "Arial"
@@ -878,8 +807,8 @@ if st.session_state.get("report_text"):
 
         def add_subtable_title(text):
             p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(10)
-            p.paragraph_format.space_after  = Pt(3)
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after  = Pt(2)
             p.paragraph_format.keep_with_next = True  # stay with table below
             r = p.add_run(text.rstrip(':'))
             r.font.size = Pt(11); r.font.name = "Arial"
@@ -895,7 +824,7 @@ if st.session_state.get("report_text"):
             # Field cell
             fc = row.cells[0]; fc.text = ""
             fp = fc.paragraphs[0]
-            fr = fp.add_run(field); fr.font.size=Pt(10); fr.font.name="Arial"; fr.font.bold=True
+            fr = fp.add_run(field); fr.font.size=Pt(9.5); fr.font.name="Arial"; fr.font.bold=True
             tc1 = fc._tc; tcPr1 = tc1.get_or_add_tcPr()
             shd1 = OxmlElement('w:shd')
             shd1.set(qn('w:val'),'clear'); shd1.set(qn('w:color'),'auto')
@@ -908,7 +837,7 @@ if st.session_state.get("report_text"):
             tcPr1.append(shd1)
             margins1 = OxmlElement('w:tcMar')
             for side in ['top','bottom','left','right']:
-                m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'80'); m.set(qn('w:type'),'dxa')
+                m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'50'); m.set(qn('w:type'),'dxa')
                 margins1.append(m)
             tcPr1.append(margins1)
             # Value cell — supports multi-line values (\n separated)
@@ -921,7 +850,7 @@ if st.session_state.get("report_text"):
                 tcPr2.append(shd2)
             margins2 = OxmlElement('w:tcMar')
             for side in ['top','bottom','left','right']:
-                m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'80'); m.set(qn('w:type'),'dxa')
+                m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'50'); m.set(qn('w:type'),'dxa')
                 margins2.append(m)
             tcPr2.append(margins2)
             # Split on newlines to support multi-line cell content (e.g. symptoms list)
@@ -932,7 +861,7 @@ if st.session_state.get("report_text"):
                 else:
                     vp = vc.add_paragraph()
                 vr = vp.add_run(vline.strip())
-                vr.font.size=Pt(10); vr.font.name="Arial"; vr.font.bold=False
+                vr.font.size=Pt(9.5); vr.font.name="Arial"; vr.font.bold=False
                 if is_header_row:
                     vr.font.color.rgb = RGBColor(0xFF,0xFF,0xFF)
                     vr.font.bold = True
@@ -970,7 +899,7 @@ if st.session_state.get("report_text"):
             if not ls:
                 if in_table: in_table = False; current_table = None
                 in_symptoms_box = False
-                doc.add_paragraph().paragraph_format.space_after = Pt(2)
+                doc.add_paragraph().paragraph_format.space_after = Pt(1)
                 continue
 
             # Section title: starts with digit + dot + space + CAPS (e.g. "1. PATIENT INFORMATION")
@@ -1052,19 +981,18 @@ if st.session_state.get("report_text"):
 
             # Normal line — check if symptoms box, Arabic (RTL) or English (LTR)
             if in_symptoms_box:
-                # Render each symptom as an indented line inside a light box feel
                 p = doc.add_paragraph()
                 p.paragraph_format.space_before = Pt(0)
-                p.paragraph_format.space_after  = Pt(3)
-                p.paragraph_format.left_indent  = Inches(0.2)
+                p.paragraph_format.space_after  = Pt(1)
+                p.paragraph_format.left_indent  = Inches(0.15)
                 r = p.add_run(f"• {ls.lstrip('•- ').strip()}")
                 r.font.size=Pt(11); r.font.name="Arial"
                 continue
             in_table = False; current_table = None
             is_arabic = any('\u0600' <= c <= '\u06ff' for c in ls)
             p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(1)
-            p.paragraph_format.space_after  = Pt(4)
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after  = Pt(2)
             if is_arabic:
                 pPr = p._p.get_or_add_pPr()
                 bidi = OxmlElement("w:bidi"); pPr.append(bidi)
