@@ -41,12 +41,13 @@ with st.sidebar:
     st.header("⚙️ الإعدادات")
     history_by = st.text_input("اسم الأخصائي / Psychologist Name")
 
+# Using the Groq API key from Streamlit secrets
 groq_key = st.secrets["GROQ_API_KEY"]
 
 st.markdown('<div class="main-title">🧠 استمارة أخذ التاريخ المرضي</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">عيادة د. هاني الحناوي — طب وجراحة الأعصاب والنفس</div>', unsafe_allow_html=True)
 
-# ── مساعدات ──
+# ── مساعدات (Helpers) ──
 def sec(ar, en=""):
     st.markdown(f'<div class="sec-header">{ar}{" / "+en if en else ""}</div>', unsafe_allow_html=True)
 
@@ -68,7 +69,8 @@ def rb(ar, en, opts, key):
 
 def sel(ar, en, opts, key):
     lbl(ar, en)
-    return st.selectbox("", opts, key=key, label_visibility="collapsed")
+    # Changed from selectbox to horizontal radio (dots) for a simpler UI!
+    return st.radio("", opts, key=key, horizontal=True, label_visibility="collapsed")
 
 def ms(ar, en, opts, key):
     lbl(ar, en)
@@ -471,12 +473,15 @@ else:
     d["extra_notes"] = ta("ملاحظات إضافية","Additional notes","c_extra",80)
     patient_name = d.get("name") or "الطفل"
 
+
 # ════════════════════════════════════════════════════════
-#  زر توليد التقرير
+#  زر توليد التقرير ونداء الـ API
 # ════════════════════════════════════════════════════════
 st.divider()
+
 if st.button("✦ توليد التقرير / Generate Report", type="primary", use_container_width=True):
-    if True:
+    with st.spinner("⏳ جاري تحليل التاريخ المرضي وإعداد التقرير السريري... / Generating clinical report..."):
+        
         siblings = d.get("siblings", [])
         sib_text = "\n".join([
             f"  {i+1}. {sb['name']} | {sb['gender']} | السن: {sb['age']} | التعليم: {sb['edu']} | ملاحظات: {sb['notes'] or 'لا يوجد'}"
@@ -585,446 +590,77 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 ملاحظات إضافية: {sv(d,'extra_notes')}
 """
 
-        # Build verbatim Arabic section
-        verbatim_block = ""
-        verbatim_fields = [
-            ("الشكوى الرئيسية", sv(d,'complaints')),
-            ("تاريخ المرض الحالي", sv(d,'hpi')),
-            ("تفاصيل الحمل", sv(d,'pregnancy') if not is_adult else ""),
-            ("تاريخ الأدوية - تفاصيل", sv(d,'drug_hx') if is_adult else ""),
-            ("التاريخ المرضي السابق - تفاصيل", sv(d,'past_hx')),
-            ("التاريخ العائلي - تفاصيل", sv(d,'family_hx')),
-            ("الفحوصات - تفاصيل", sv(d,'investigations')),
-            ("الجلسات العلاجية الحالية", sv(d,'therapy') if not is_adult else ""),
-            ("ملاحظات إضافية", sv(d,'extra_notes')),
-        ]
-        for heading, text in verbatim_fields:
-            if text and text != "لم يُذكر":
-                verbatim_block += f"\n{heading}:\n{text}\n"
-        if not verbatim_block:
-            verbatim_block = "(No long text responses provided)"
+        # 1. Build the Verbatim Block securely in Python (No AI hallucination here!)
+        verbatim_block = "\n\n---\n### 📝 الاستجابات الأصلية (Original Arabic Responses)\n\n"
+        
+        def add_verbatim(title, text):
+            if text and text not in ["—", "— اختر —", "لم يُذكر"]:
+                return f"**{title}:**\n> {text}\n\n"
+            return ""
 
-        prompt = f"""You are a clinical report formatter. Generate a COMPACT, professional clinical report in ENGLISH.
-TARGET: 2–3 pages maximum. Every section must be dense and space-efficient.
+        verbatim_block += add_verbatim("الشكوى الرئيسية (C/O)", sv(d, 'complaints'))
+        verbatim_block += add_verbatim("تاريخ المرض الحالي (HPI)", sv(d, 'hpi'))
+        if not is_adult:
+            verbatim_block += add_verbatim("تفاصيل الحمل والولادة", sv(d, 'pregnancy'))
+            verbatim_block += add_verbatim("ملاحظات النمو", sv(d, 'dev_notes'))
+        verbatim_block += add_verbatim("تفاصيل الفحوصات", sv(d, 'investigations'))
+        verbatim_block += add_verbatim("ملاحظات إضافية", sv(d, 'extra_notes'))
 
-═══════════════════════════════════════════════
-LANGUAGE RULES:
-1. Main report (sections 1–8): English ONLY. No Arabic text.
-2. Short answers / MCQ / Yes-No / single words: convert to concise English inline (e.g. Sleep: Interrupted | Appetite: Decreased).
-3. Long Arabic text (paragraphs, narratives): DO NOT translate. Place ONLY in final section "Original Arabic Responses" verbatim.
-4. Never mix Arabic and English in the same sentence or section.
+        # 2. System Prompt for Premium Clinical Formatting
+        system_prompt = """
+        You are an expert Chief Medical Officer. Your job is to convert the provided patient data into a premium, highly structured clinical psychiatric/neurological report in English.
 
-CONTENT RULES:
-5. DO NOT add diagnosis, interpretation, clinical judgment, assumptions, or recommendations.
-6. DO NOT add any information not in the input.
-7. Skip any field that is "لم يُذكر" (not reported). Skip entire sections if all fields are empty.
-8. "No" / "لا" answers: omit entirely unless clinically significant.
+        Follow this strict format:
+        1. Use clean Markdown headings (e.g., ### Patient Demographics).
+        2. Use bullet points for lists.
+        3. Bold critical keys (e.g., **Age:** 34).
+        4. Highlight "Red Flags" (like suicidal thoughts, poor insight, severe substance use, or severe family history) in a dedicated **⚠️ Clinical Alerts** section at the top.
+        5. If a field says "لم يُذكر" or is empty, exclude it entirely to keep the report clean.
+        6. Keep the tone strictly professional, objective, and easy for a doctor to scan in 10 seconds.
+        7. DO NOT include the original Arabic text. (It will be appended manually outside of your response).
+        """
 
-COMPACT FORMATTING RULES:
-9. No markdown symbols (no **, no __, no ##, no #, no ---, no bullet dashes).
-10. Section titles: ALL CAPS on own line with number. Example: "1. PATIENT INFORMATION"
-11. Sub-table titles: Title Case followed by colon. Example: "Personal Details:"
-12. Table rows: pipe format exactly — Field | Value
-13. Where possible, group multiple short fields on one row using inline format: Field A: Value A  |  Field B: Value B
-14. For brief observations/findings: inline format per line, no tables. Example: Sleep: Interrupted
-15. Specialist Name appears ONLY in the header block, never repeated.
-16. No blank lines between table rows. Minimal blank lines between sub-sections.
-17. Avoid sub-tables with only 1–2 rows — merge them into the nearest logical table.
-
-═══════════════════════════════════════════════
-REPORT STRUCTURE (follow this exact order):
-
-REPORT HEADER:
-Patient Name | [value]
-Form Type | [value]
-Specialist Name | [value]
-Date | [value]  |  Phone | [value]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-CLINICAL SUMMARY
-Write 2–4 concise clinical sentences covering: patient identity, chief complaint, key background. English only. No diagnosis. No repetition of structured fields verbatim.
-
-1. PATIENT INFORMATION
-Single compact table combining personal, social, and lifestyle fields.
-{"Fields to include: Name, DOB, Age, Gender, Education, Occupation, Social Status, Smoking, Hobbies, Referral Source, History Type" if is_adult else "Fields to include: Name, DOB, Age, Gender, Birth Order, Lives With, School, Grade, Academic Level, Screen Time, Referral Source, History Type"}
-Use inline grouping: e.g. DOB: [value]  |  Age: [value]  |  Gender: [value]
-Skip fields not reported.
-
-2. PRESENTING CONCERNS
-Two compact parts:
-Part A — single small table (3 rows max):
-Onset | [value]
-Mode | [value]
-Course | [value]
-Part B — Symptoms (inline, one per line, no table):
-Write each symptom as a plain line. Example: Difficulty concentrating
-
-3. {"FAMILY & MARRIAGE BACKGROUND" if is_adult else "FAMILY BACKGROUND"}
-Compact tables, group related fields together:
-Parents table: Father name/age/occupation/status + Mother name/age/occupation/status in one table (4 rows max).
-{"Marriage table: Spouse name/age/occupation, Duration, Engagement, Children, Quality — all in one table." if is_adult else ""}
-Parents relationship + consanguinity inline.
-Siblings: one compact table, one row per sibling.
-
-{"" if is_adult else """4. DEVELOPMENTAL HISTORY
-Compact tables, no header rows, group into two tables:
-Table A — Birth & Feeding: Pregnancy, Birth type, Complications, Vaccinations, Breastfeeding, Weaning, Teething, Toilet training.
-Table B — Development: Motor, Speech, Attention, Concentration, Comprehension.
-Include only provided milestones."""}
-
-{"4. PAST HISTORY" if is_adult else "5. PAST HISTORY"}
-Single compact table with all past history items:
-{"Fields: Previous psychiatric illness, Previous hospitalization, Drug history (on medication/compliance)." if is_adult else "Fields: High fever, Head trauma, Convulsions, Post-vaccine complications, Previous hospitalization, Previous therapy."}
-One row per finding. Skip if not reported.
-
-{"5. FAMILY HISTORY" if is_adult else "6. FAMILY HISTORY"}
-Single compact table:
-{"Fields: Psychiatric in family, Neurological in family, Chronic illness." if is_adult else "Fields: Psychiatric in family, Neurological in family, Intellectual disability in family, Epilepsy in family."}
-
-{"6. MEDICAL / BEHAVIORAL OBSERVATIONS" if is_adult else "7. MEDICAL / BEHAVIORAL OBSERVATIONS"}
-Inline format, one item per line (no table):
-{"Sleep: [value]  |  Appetite: [value]  |  Suicidal ideation: [value]  |  Insight: [value]  |  Substance use: [value]" if is_adult else "Sleep: [value]  |  Appetite: [value]"}
-{"" if is_adult else "Attention: [value]  |  Concentration: [value]  |  Comprehension: [value]"}
-{"" if is_adult else "Punishment methods: [value]  |  Stress reaction: [value]"}
-Any additional observations inline.
-
-{"7. INVESTIGATIONS" if is_adult else "8. INVESTIGATIONS"}
-{"Single compact table: investigations done, details." if is_adult else "Single compact table: CT, MRI, EEG, IQ (SB5), CARS score. One row per test."}
-Skip if none reported.
-
-{"8. ORIGINAL ARABIC RESPONSES" if is_adult else "9. ORIGINAL ARABIC RESPONSES"}
-Copy each item EXACTLY as written — no modification, no translation, no summarization.
-{verbatim_block}
-
-═══════════════════════════════════════════════
-DATA:
-{data_block}
-═══════════════════════════════════════════════
-History by: {history_by or 'Not reported'} | Sheet: {"Adult" if is_adult else "Child"}
-"""
-
-        with st.spinner("جاري إنشاء التقرير..."):
-            try:
-                client = Groq(api_key=groq_key)
-                response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=4000
-                )
-                st.session_state["report_text"] = response.choices[0].message.content
-                st.session_state["report_pname"]= patient_name
-                st.session_state["report_sheet"]= "بالغ" if is_adult else "طفل"
-                st.session_state["report_by"]   = history_by or "—"
-            except Exception as e:
-                st.error(f"خطأ: {str(e)}")
-
-# ════════════════════════════════════════════════════════
-#  عرض التقرير
-# ════════════════════════════════════════════════════════
-if st.session_state.get("report_text"):
-    rt  = st.session_state["report_text"]
-    pn  = st.session_state.get("report_pname","المريض")
-    rs  = st.session_state.get("report_sheet","")
-    rb_ = st.session_state.get("report_by","—")
-    fn  = f"{pn.replace(' ','_')}_HistorySheet.docx"
-
-    st.divider()
-    st.markdown("### ✅ تم إنشاء التقرير")
-    st.text_area("", value=rt, height=600, label_visibility="collapsed")
-
-    def build_docx(rt, pn, rs, rb_, logo_path):
-        doc = Document()
-        for section in doc.sections:
-            section.top_margin=Cm(1.8); section.bottom_margin=Cm(1.8)
-            section.left_margin=Cm(2.0); section.right_margin=Cm(2.0)
-            section.different_first_page_header_footer=True
-            for hdr in [section.header, section.first_page_header]:
-                for p in hdr.paragraphs: p.clear()
-        # Set document default RTL
+        # 3. Call the Groq API
         try:
-            settings = doc.settings.element
-            rsid = OxmlElement('w:themeFontLang')
-            rsid.set(qn('w:bidi'), 'ar-EG')
-            settings.append(rsid)
-        except: pass
+            client = Groq(api_key=groq_key)
+            completion = client.chat.completions.create(
+                model="llama3-70b-8192", # You can change this to your preferred Groq model
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": data_block}
+                ],
+                temperature=0.2,
+                max_tokens=2500,
+                top_p=1,
+                stream=False,
+            )
+            
+            english_report = completion.choices[0].message.content
+            
+            # 4. Combine the AI English report with the Python-generated Arabic verbatim block
+            final_report = english_report + verbatim_block
+            
+            # Display it on screen
+            st.success("✅ تم إعداد التقرير بنجاح! / Report Generated Successfully!")
+            with st.expander("📄 عرض التقرير النهائي / View Final Report", expanded=True):
+                st.markdown(final_report)
+                
+            # --- Document Creation ---
+            doc = Document()
+            doc.add_heading(f'Clinical Assessment Report - {patient_name}', 0)
+            doc.add_paragraph(final_report) # Basic text insert. You can refine formatting here if needed.
+            
+            # Save doc to a bytes buffer so user can download it
+            bio = io.BytesIO()
+            doc.save(bio)
+            
+            st.download_button(
+                label="📥 تحميل كملف وورد / Download Word Document",
+                data=bio.getvalue(),
+                file_name=f"Clinical_Report_{patient_name.replace(' ', '_')}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                type="primary"
+            )
 
-        for section in doc.sections:
-            sectPr=section._sectPr; pgB=OxmlElement('w:pgBorders')
-            pgB.set(qn('w:offsetFrom'),'page')
-            for side in ('top','left','bottom','right'):
-                b=OxmlElement(f'w:{side}'); b.set(qn('w:val'),'single')
-                b.set(qn('w:sz'),'12'); b.set(qn('w:space'),'24'); b.set(qn('w:color'),'1B2A4A')
-                pgB.append(b)
-            sectPr.append(pgB)
-        for section in doc.sections:
-            footer=section.footer
-            para=footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
-            para.clear(); para.alignment=WD_ALIGN_PARAGRAPH.CENTER
-            run=para.add_run(); run.font.size=Pt(9); run.font.color.rgb=CLINIC_BLUE
-            for tag,text in [('begin',None),(None,' PAGE '),('end',None)]:
-                if tag:
-                    el=OxmlElement('w:fldChar'); el.set(qn('w:fldCharType'),tag); run._r.append(el)
-                else:
-                    instr=OxmlElement('w:instrText'); instr.text=text; run._r.append(instr)
-        p_top=doc.add_paragraph()
-        p_top.paragraph_format.space_before=Pt(0); p_top.paragraph_format.space_after=Pt(4)
-        if os.path.exists(logo_path):
-            p_top.add_run().add_picture(logo_path,width=Inches(1.2))
-        r_t=p_top.add_run("   التقرير السريري للتاريخ المرضي")
-        r_t.font.name="Arial"; r_t.font.size=Pt(18); r_t.font.bold=True; r_t.font.color.rgb=CLINIC_BLUE
-        pPr=p_top._p.get_or_add_pPr(); pBdr=OxmlElement('w:pBdr')
-        bot=OxmlElement('w:bottom'); bot.set(qn('w:val'),'single')
-        bot.set(qn('w:sz'),'8'); bot.set(qn('w:space'),'4'); bot.set(qn('w:color'),'1A5CB8')
-        pBdr.append(bot); pPr.append(pBdr)
-        doc.add_paragraph()
-        def add_rtl_para(text, bold=False, size=11, color=None, space_before=0, space_after=4, underline=False):
-            p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(space_before)
-            p.paragraph_format.space_after  = Pt(space_after)
-            pPr = p._p.get_or_add_pPr()
-            bidi = OxmlElement("w:bidi"); pPr.append(bidi)
-            jc   = OxmlElement("w:jc");   jc.set(qn("w:val"),"right"); pPr.append(jc)
-            r = p.add_run(text)
-            r.font.size = Pt(size); r.font.name = "Arial"; r.bold = bold
-            if color: r.font.color.rgb = color
-            if underline: r.font.underline = True
-            return p
-
-        def add_section_title(text):
-            p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(10)
-            p.paragraph_format.space_after  = Pt(2)
-            p.paragraph_format.keep_with_next = True  # stay with first content below
-            r = p.add_run(text.strip('# '))
-            r.font.size = Pt(13); r.font.name = "Arial"
-            r.font.bold = True; r.font.color.rgb = CLINIC_BLUE
-            pPr = p._p.get_or_add_pPr()
-            pBdr = OxmlElement('w:pBdr')
-            bot  = OxmlElement('w:bottom')
-            bot.set(qn('w:val'),'single'); bot.set(qn('w:sz'),'6')
-            bot.set(qn('w:space'),'2');    bot.set(qn('w:color'),'1A5CB8')
-            pBdr.append(bot); pPr.append(pBdr)
-
-        def add_subtable_title(text):
-            p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(6)
-            p.paragraph_format.space_after  = Pt(2)
-            p.paragraph_format.keep_with_next = True  # stay with table below
-            r = p.add_run(text.rstrip(':'))
-            r.font.size = Pt(11); r.font.name = "Arial"
-            r.font.bold = True; r.font.color.rgb = RGBColor(0x1B,0x2A,0x4A)
-
-        def add_table_row(table, field, value, is_header_row=False):
-            row = table.add_row()
-            # Prevent row from splitting across pages
-            trPr = row._tr.get_or_add_trPr()
-            cantSplit = OxmlElement('w:cantSplit')
-            cantSplit.set(qn('w:val'), '1')
-            trPr.append(cantSplit)
-            # Field cell
-            fc = row.cells[0]; fc.text = ""
-            fp = fc.paragraphs[0]
-            fr = fp.add_run(field); fr.font.size=Pt(9.5); fr.font.name="Arial"; fr.font.bold=True
-            tc1 = fc._tc; tcPr1 = tc1.get_or_add_tcPr()
-            shd1 = OxmlElement('w:shd')
-            shd1.set(qn('w:val'),'clear'); shd1.set(qn('w:color'),'auto')
-            # Header row: deep blue bg + white text; Data row: light blue bg
-            if is_header_row:
-                shd1.set(qn('w:fill'),'1A5CB8')
-                fr.font.color.rgb = RGBColor(0xFF,0xFF,0xFF)
-            else:
-                shd1.set(qn('w:fill'),'E8F0FE')
-            tcPr1.append(shd1)
-            margins1 = OxmlElement('w:tcMar')
-            for side in ['top','bottom','left','right']:
-                m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'50'); m.set(qn('w:type'),'dxa')
-                margins1.append(m)
-            tcPr1.append(margins1)
-            # Value cell — supports multi-line values (\n separated)
-            vc = row.cells[1]; vc.text = ""
-            tc2 = vc._tc; tcPr2 = tc2.get_or_add_tcPr()
-            if is_header_row:
-                shd2 = OxmlElement('w:shd')
-                shd2.set(qn('w:val'),'clear'); shd2.set(qn('w:color'),'auto')
-                shd2.set(qn('w:fill'),'2E6FD4')
-                tcPr2.append(shd2)
-            margins2 = OxmlElement('w:tcMar')
-            for side in ['top','bottom','left','right']:
-                m = OxmlElement(f'w:{side}'); m.set(qn('w:w'),'50'); m.set(qn('w:type'),'dxa')
-                margins2.append(m)
-            tcPr2.append(margins2)
-            # Split on newlines to support multi-line cell content (e.g. symptoms list)
-            value_lines = value.split('\n') if '\n' in value else [value]
-            for idx_vl, vline in enumerate(value_lines):
-                if idx_vl == 0:
-                    vp = vc.paragraphs[0]
-                else:
-                    vp = vc.add_paragraph()
-                vr = vp.add_run(vline.strip())
-                vr.font.size=Pt(9.5); vr.font.name="Arial"; vr.font.bold=False
-                if is_header_row:
-                    vr.font.color.rgb = RGBColor(0xFF,0xFF,0xFF)
-                    vr.font.bold = True
-
-        def make_table():
-            t = doc.add_table(rows=0, cols=2)
-            t.style = 'Table Grid'
-            try:
-                tblPr = t._tbl.tblPr
-                tblW  = OxmlElement('w:tblW')
-                tblW.set(qn('w:w'),'9026'); tblW.set(qn('w:type'),'dxa')
-                tblPr.append(tblW)
-                cols_el = OxmlElement('w:tblGrid')
-                for w in [3000, 6026]:
-                    gc = OxmlElement('w:gridCol'); gc.set(qn('w:w'), str(w))
-                    cols_el.append(gc)
-                t._tbl.insert(0, cols_el)
-                # Keep table together on one page if it fits
-                tblLook = OxmlElement('w:tblLook')
-                tblLook.set(qn('w:val'), '04A0')
-                tblPr.append(tblLook)
-            except: pass
-            return t
-
-        # ── Parse and render the report ──
-        in_table = False
-        current_table = None
-        in_dev_history = False
-        in_symptoms_box = False
-        lines = rt.split('\n')
-        i = 0
-        while i < len(lines):
-            ls = lines[i].strip()
-            i += 1
-            if not ls:
-                if in_table: in_table = False; current_table = None
-                in_symptoms_box = False
-                doc.add_paragraph().paragraph_format.space_after = Pt(1)
-                continue
-
-            # Section title: starts with digit + dot + space + CAPS (e.g. "1. PATIENT INFORMATION")
-            import re
-            if (re.match(r'^\d+\.\s+[A-Z\s]+$', ls) or
-                re.match(r'^\d+\.\s+[A-Z][A-Z\s&]+$', ls) or
-                ls in ('CLINICAL SUMMARY', 'REPORT HEADER')):
-                in_table = False; current_table = None
-                in_dev_history = 'DEVELOPMENTAL' in ls.upper()
-                in_symptoms_box = False
-                add_section_title(ls)
-                continue
-
-            # Sub-table title: Title Case line ending with colon, no pipe
-            if ls.endswith(':') and '|' not in ls and len(ls) < 60 and ls[0].isupper():
-                in_table = False; current_table = None
-                doc.add_paragraph().paragraph_format.space_after = Pt(2)
-                add_subtable_title(ls)
-                # Symptoms section: no table — just collect lines as styled text box
-                if ls.lower().startswith('symptom'):
-                    in_symptoms_box = True
-                    in_table = False; current_table = None
-                else:
-                    in_symptoms_box = False
-                    current_table = make_table()
-                    if not in_dev_history:
-                        add_table_row(current_table, "Field", "Value", is_header_row=True)
-                    in_table = True
-                continue
-
-            # Table row: contains pipe separator
-            if '|' in ls:
-                parts = [p.strip() for p in ls.split('|') if p.strip()]
-                # Skip markdown separator rows
-                if all(set(p) <= set('-: ') for p in parts): continue
-
-                # Always skip Field|Value and Milestone|Finding header rows —
-                # headers are added programmatically, not from AI output
-                skip_keywords = [
-                    ("field","value"), ("milestone","finding"),
-                    ("item","detail"), ("category","information")
-                ]
-                if len(parts) >= 2 and (parts[0].strip('* ').lower(), parts[1].strip('* ').lower()) in skip_keywords:
-                    continue  # skip — never render these from AI output
-
-                is_new_table = not in_table or current_table is None
-                if is_new_table:
-                    in_table = True
-                    current_table = make_table()
-                    # Add header row only for non-developmental tables
-                    if not in_dev_history:
-                        add_table_row(current_table, "Field", "Value", is_header_row=True)
-
-                # Handle multi-line symptoms in one cell
-                if len(parts) >= 2:
-                    field = parts[0].strip('* ')
-                    value = ' | '.join(parts[1:])  # rejoin if value contained pipes
-                    add_table_row(current_table, field, value)
-                elif len(parts) == 1:
-                    add_table_row(current_table, parts[0].strip('* '), '')
-                continue
-
-            # Separator lines
-            if ls.startswith('━') or ls.startswith('══') or ls.startswith('---'):
-                in_table = False; current_table = None
-                p = doc.add_paragraph(); p.paragraph_format.space_before=Pt(4)
-                pPr2=p._p.get_or_add_pPr(); pBdr2=OxmlElement('w:pBdr')
-                b2=OxmlElement('w:bottom'); b2.set(qn('w:val'),'single')
-                b2.set(qn('w:sz'),'4'); b2.set(qn('w:space'),'1'); b2.set(qn('w:color'),'CCCCCC')
-                pBdr2.append(b2); pPr2.append(pBdr2)
-                continue
-
-            # Arabic verbatim heading (ends with colon, contains Arabic)
-            if ls.endswith(':') and any('\u0600' <= c <= '\u06ff' for c in ls):
-                in_table = False; current_table = None
-                add_rtl_para(ls.rstrip(':'), bold=True, size=11,
-                             color=RGBColor(0x1B,0x2A,0x4A), space_before=10)
-                continue
-
-            # Normal line — check if symptoms box, Arabic (RTL) or English (LTR)
-            if in_symptoms_box:
-                p = doc.add_paragraph()
-                p.paragraph_format.space_before = Pt(0)
-                p.paragraph_format.space_after  = Pt(1)
-                p.paragraph_format.left_indent  = Inches(0.15)
-                r = p.add_run(f"• {ls.lstrip('•- ').strip()}")
-                r.font.size=Pt(11); r.font.name="Arial"
-                continue
-            in_table = False; current_table = None
-            is_arabic = any('\u0600' <= c <= '\u06ff' for c in ls)
-            p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(0)
-            p.paragraph_format.space_after  = Pt(2)
-            if is_arabic:
-                pPr = p._p.get_or_add_pPr()
-                bidi = OxmlElement("w:bidi"); pPr.append(bidi)
-                jc   = OxmlElement("w:jc"); jc.set(qn("w:val"),"right"); pPr.append(jc)
-            r = p.add_run(ls); r.font.size=Pt(11); r.font.name="Arial"
-        # Footer removed per request
-        buf=io.BytesIO(); doc.save(buf); buf.seek(0)
-        return buf
-
-    col1,col2,col3=st.columns(3)
-    with col1:
-        docx_buf=build_docx(rt,pn,rs,rb_,LOGO_PATH)
-        st.download_button("📄 تحميل Word",data=docx_buf,file_name=fn,
-                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    with col2:
-        if st.button("📧 إرسال بالبريد"):
-            try:
-                docx_buf2=build_docx(rt,pn,rs,rb_,LOGO_PATH)
-                msg=MIMEMultipart(); msg['From']=GMAIL_USER; msg['To']=RECIPIENT_EMAIL
-                msg['Subject']=f"تقرير التاريخ المرضي — {pn}"
-                msg.attach(MIMEText(f"التقرير المرفق خاص بـ: {pn}\nالنوع: {rs}\nالأخصائي: {rb_}",'plain'))
-                part=MIMEBase('application','octet-stream'); part.set_payload(docx_buf2.read())
-                encoders.encode_base64(part)
-                part.add_header('Content-Disposition',f'attachment; filename="{fn}"')
-                msg.attach(part)
-                with smtplib.SMTP_SSL('smtp.gmail.com',465) as server:
-                    server.login(GMAIL_USER,GMAIL_PASS)
-                    server.sendmail(GMAIL_USER,RECIPIENT_EMAIL,msg.as_string())
-                st.success(f"✅ تم الإرسال إلى {RECIPIENT_EMAIL}")
-            except Exception as e:
-                st.error(f"خطأ في الإرسال: {str(e)}")
-    with col3:
-        if st.button("↺ مريض جديد"):
-            for key in list(st.session_state.keys()): del st.session_state[key]
-            st.rerun()
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء توليد التقرير: {e}")
