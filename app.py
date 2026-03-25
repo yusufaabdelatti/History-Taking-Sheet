@@ -41,13 +41,12 @@ with st.sidebar:
     st.header("⚙️ الإعدادات")
     history_by = st.text_input("اسم الأخصائي / Psychologist Name")
 
-# Using the Groq API key from Streamlit secrets
 groq_key = st.secrets["GROQ_API_KEY"]
 
 st.markdown('<div class="main-title">🧠 استمارة أخذ التاريخ المرضي</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">عيادة د. هاني الحناوي — طب وجراحة الأعصاب والنفس</div>', unsafe_allow_html=True)
 
-# ── مساعدات (Helpers) ──
+# ── مساعدات ──
 def sec(ar, en=""):
     st.markdown(f'<div class="sec-header">{ar}{" / "+en if en else ""}</div>', unsafe_allow_html=True)
 
@@ -69,7 +68,7 @@ def rb(ar, en, opts, key):
 
 def sel(ar, en, opts, key):
     lbl(ar, en)
-    # Changed from selectbox to horizontal radio (dots) for a simpler UI!
+    # Swapped Selectbox for Radio "Dots" for easier clicking
     return st.radio("", opts, key=key, horizontal=True, label_visibility="collapsed")
 
 def ms(ar, en, opts, key):
@@ -96,7 +95,7 @@ REFERRAL_AR  = [NA,"ذاتي","الأسرة","طبيب","أخصائي نفسي",
 HTYPE_AR     = [NA,"أولي / Initial","متابعة / Follow-up","طارئ / Emergency","استشاري / Consultation"]
 ALIVE_M      = ["على قيد الحياة","متوفى","غير معروف"]
 ALIVE_F      = ["على قيد الحياة","متوفاة","غير معروف"]
-CONS_AR      = [NA,"لا توجد قرابة","درجة أولى (مثال: أبناء العمومة والخؤولة)","درجة ثانية (مثال: أقارب من الدرجة الثانية)","درجة ثالثة (مثال: أقارب بعيدون)"]
+CONS_AR      = [NA,"لا توجد قرابة","درجة أولى","درجة ثانية","درجة ثالثة"]
 PARENTS_REL  = [NA,"جيدة","متوسطة","سيئة","منفصلان","مطلقان","أحدهما متوفى"]
 MARQ_AR      = [NA,"جيدة","متوسطة","سيئة","منفصلان"]
 PRE_MAR      = [NA,"لا توجد علاقة سابقة","تعارف فقط","علاقة طويلة","زواج مرتب","أخرى"]
@@ -178,7 +177,7 @@ if is_adult:
         d["hobbies"]    = ms("الهوايات","Hobbies", HOBBIES_AR, "a_hobbies")
     with c2:
         d["social"]     = sel("الحالة الاجتماعية","Social Status", SOCIAL_AR, "a_social")
-        d["smoking"]    = sel("التدخين","Smoking", SMOKING_AR, "a_smoking")
+        d["smoking"]    = sel("الت التدخين","Smoking", SMOKING_AR, "a_smoking")
         d["referral"]   = sel("مصدر الإحالة","Referral Source", REFERRAL_AR, "a_referral")
         d["htype"]      = sel("نوع التاريخ","History Type", HTYPE_AR, "a_htype")
         d["phone"]      = ti("رقم الهاتف","Phone","a_phone")
@@ -422,24 +421,24 @@ else:
     c1, c2 = st.columns(2)
     with c1:
         d["fam_psych"]   = rb("مرض نفسي في الأسرة؟","Psychiatric in family?", نعم_لا_لاينطبق, "c_fpsych")
-        if st.session_state.get("c_fpsych") == "نعم":
-            d["fam_psych_details"] = ti("ما هو المرض النفسي؟ (من في الأسرة)","Specify psychiatric illness","c_fpsych_det")
+        if st.session_state.get("a_fpsych") == "نعم":
+            d["fam_psych_details"] = ti("ما هو المرض النفسي؟","Specify psychiatric illness","c_fpsych_det")
         else:
             d["fam_psych_details"] = ""
         d["fam_neuro"]   = rb("مرض عصبي في الأسرة؟","Neurological in family?", نعم_لا_لاينطبق, "c_fneuro")
-        if st.session_state.get("c_fneuro") == "نعم":
-            d["fam_neuro_details"] = ti("ما هو المرض العصبي؟ (من في الأسرة)","Specify neurological illness","c_fneuro_det")
+        if st.session_state.get("a_fneuro") == "نعم":
+            d["fam_neuro_details"] = ti("ما هو المرض العصبي؟","Specify neurological illness","c_fneuro_det")
         else:
             d["fam_neuro_details"] = ""
     with c2:
         d["fam_mr"]      = rb("إعاقة ذهنية في الأسرة؟","MR in family?", نعم_لا_لاينطبق, "c_fmr")
         if st.session_state.get("c_fmr") == "نعم":
-            d["fam_mr_details"] = ti("من في الأسرة؟ وما درجة الإعاقة؟","Specify MR details","c_fmr_det")
+            d["fam_mr_details"] = ti("درجة الإعاقة؟","Specify MR details","c_fmr_det")
         else:
             d["fam_mr_details"] = ""
         d["fam_epilepsy"]= rb("صرع في الأسرة؟","Epilepsy in family?", نعم_لا_لاينطبق, "c_fepil")
         if st.session_state.get("c_fepil") == "نعم":
-            d["fam_epilepsy_details"] = ti("من في الأسرة؟ وهل يتعالج؟","Specify epilepsy details","c_fepil_det")
+            d["fam_epilepsy_details"] = ti("من يتعالج؟","Specify epilepsy details","c_fepil_det")
         else:
             d["fam_epilepsy_details"] = ""
     d["family_hx"] = ta("تفاصيل التاريخ العائلي","Details","c_famhx",80)
@@ -484,7 +483,7 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
         
         siblings = d.get("siblings", [])
         sib_text = "\n".join([
-            f"  {i+1}. {sb['name']} | {sb['gender']} | السن: {sb['age']} | التعليم: {sb['edu']} | ملاحظات: {sb['notes'] or 'لا يوجد'}"
+            f"  {i+1}. {sb['name']} | {sb.get('gender', 'N/A')} | السن: {sb['age']} | التعليم: {sb.get('edu', 'N/A')} | ملاحظات: {sb['notes'] or 'لا يوجد'}"
             for i, sb in enumerate(siblings)
         ]) or "لا يوجد إخوة مُدخَلون"
 
@@ -590,7 +589,7 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
 ملاحظات إضافية: {sv(d,'extra_notes')}
 """
 
-        # 1. Build the Verbatim Block securely in Python (No AI hallucination here!)
+        # 1. Build the Verbatim Block (Security fallback so no Arabic is lost)
         verbatim_block = "\n\n---\n### 📝 الاستجابات الأصلية (Original Arabic Responses)\n\n"
         
         def add_verbatim(title, text):
@@ -606,56 +605,50 @@ if st.button("✦ توليد التقرير / Generate Report", type="primary", 
         verbatim_block += add_verbatim("تفاصيل الفحوصات", sv(d, 'investigations'))
         verbatim_block += add_verbatim("ملاحظات إضافية", sv(d, 'extra_notes'))
 
-        # 2. System Prompt for Premium Clinical Formatting
+        # 2. Premium System Prompt for Groq
         system_prompt = """
-        You are an expert Chief Medical Officer. Your job is to convert the provided patient data into a premium, highly structured clinical psychiatric/neurological report in English.
+        You are an expert Chief Medical Officer. Convert the provided patient data into a premium, highly structured clinical psychiatric/neurological report in English.
 
         Follow this strict format:
         1. Use clean Markdown headings (e.g., ### Patient Demographics).
         2. Use bullet points for lists.
         3. Bold critical keys (e.g., **Age:** 34).
-        4. Highlight "Red Flags" (like suicidal thoughts, poor insight, severe substance use, or severe family history) in a dedicated **⚠️ Clinical Alerts** section at the top.
+        4. Create a dedicated section at the very top titled **⚠️ Clinical Alerts / Red Flags** (Highlighting severe items like suicidal ideation, severe non-compliance, active active substance use, or alarming family history).
         5. If a field says "لم يُذكر" or is empty, exclude it entirely to keep the report clean.
-        6. Keep the tone strictly professional, objective, and easy for a doctor to scan in 10 seconds.
-        7. DO NOT include the original Arabic text. (It will be appended manually outside of your response).
+        6. Use a professional, objective, and sterile tone. Easy for a doctor to scan in 10 seconds.
+        7. DO NOT summarize the original Arabic verbatim responses. Leave them out completely, as we will append them separately.
         """
 
-        # 3. Call the Groq API
         try:
             client = Groq(api_key=groq_key)
             completion = client.chat.completions.create(
-                model="llama3-70b-8192", # You can change this to your preferred Groq model
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": data_block}
                 ],
-                temperature=0.2,
-                max_tokens=2500,
-                top_p=1,
-                stream=False,
+                temperature=0.2
             )
             
             english_report = completion.choices[0].message.content
-            
-            # 4. Combine the AI English report with the Python-generated Arabic verbatim block
             final_report = english_report + verbatim_block
             
-            # Display it on screen
-            st.success("✅ تم إعداد التقرير بنجاح! / Report Generated Successfully!")
-            with st.expander("📄 عرض التقرير النهائي / View Final Report", expanded=True):
+            st.success("✅ تم توليد التقرير بنجاح!")
+            
+            # Use streamlit view box
+            with st.expander("📄 التقرير النهائي / Final Premium Report", expanded=True):
                 st.markdown(final_report)
                 
-            # --- Document Creation ---
+            # --- Download logic ---
             doc = Document()
-            doc.add_heading(f'Clinical Assessment Report - {patient_name}', 0)
-            doc.add_paragraph(final_report) # Basic text insert. You can refine formatting here if needed.
+            doc.add_heading(f'Clinical Assessment - {patient_name}', 0)
+            doc.add_paragraph(final_report)
             
-            # Save doc to a bytes buffer so user can download it
             bio = io.BytesIO()
             doc.save(bio)
             
             st.download_button(
-                label="📥 تحميل كملف وورد / Download Word Document",
+                label="📥 تحميل كملف وورد / Download Word",
                 data=bio.getvalue(),
                 file_name=f"Clinical_Report_{patient_name.replace(' ', '_')}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
