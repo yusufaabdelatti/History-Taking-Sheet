@@ -46,7 +46,7 @@ if not st.session_state.access_granted:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2: st.image(LOGO_PATH, use_container_width=True)
     st.markdown("""<div style="max-width:420px;margin:3rem auto;text-align:center;">
-        <h2 style="font-size:22px;font-weight:700;color:#1A5CB8;margin-bottom:8px;">
+        <h2 style="font-size:22px;font-weight:700;color:#1A5CB8;margin-bottom:3px;">
             استمارة التاريخ المرضي
         </h2>
         <p style="color:#888;font-size:13px;margin-bottom:1.5rem;line-height:1.8;">
