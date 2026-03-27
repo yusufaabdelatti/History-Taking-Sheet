@@ -37,6 +37,42 @@ DOCTOR = {
     "phone":  "+20 1000756200",
 }
 
+# ── Access code gate ───────────────────────────────────────
+if "access_granted" not in st.session_state:
+    st.session_state.access_granted = False
+
+if not st.session_state.access_granted:
+    if os.path.exists(LOGO_PATH):
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2: st.image(LOGO_PATH, use_container_width=True)
+    st.markdown("""<div style="max-width:420px;margin:3rem auto;text-align:center;">
+        <h2 style="font-size:22px;font-weight:700;color:#1A5CB8;margin-bottom:8px;">
+            استمارة التاريخ المرضي
+        </h2>
+        <p style="color:#888;font-size:13px;margin-bottom:1.5rem;line-height:1.8;">
+            هذه الاستمارة مخصصة للأخصائيين المعتمدين فقط.<br>
+            يرجى إدخال رمز الوصول للمتابعة.
+        </p>
+    </div>""", unsafe_allow_html=True)
+    col_a, col_b, col_c = st.columns([1, 2, 1])
+    with col_b:
+        code = st.text_input("رمز الوصول", type="password",
+                             placeholder="أدخل رمز الوصول",
+                             label_visibility="collapsed")
+        if st.button("دخول", use_container_width=True):
+            valid_codes = [c.strip() for c in st.secrets.get("ACCESS_CODE", "").split(",")]
+            if code.strip() in valid_codes:
+                st.session_state.access_granted = True
+                st.rerun()
+            else:
+                st.markdown("""<div style="background:#FFF0F0;border-right:3px solid #D9534F;
+                    border-left:none;padding:.8rem 1rem;border-radius:4px 0 0 4px;
+                    font-size:.88rem;color:#7A1A1A;margin:.5rem 0;
+                    direction:rtl;text-align:right;">
+                    &#9888; رمز الوصول غير صحيح. يرجى المراجعة والمحاولة مرة أخرى.
+                </div>""", unsafe_allow_html=True)
+    st.stop()
+
 with st.sidebar:
     st.header("⚙️ الإعدادات")
     history_by = st.text_input("اسم الأخصائي / Psychologist Name")
